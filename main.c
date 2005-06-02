@@ -416,6 +416,7 @@ const char *FindLibName(const char *lib, unsigned int nid)
 	{
 		snprintf(lib_name, sizeof(lib_name), "%s_%08X", lib, nid);
 	}
+	//fprintf(stderr, "//%08X\n", nid);
 
 	return lib_name;
 }
@@ -541,7 +542,7 @@ void DumpExports(FILE *fp, const unsigned char *pElfBin, unsigned long iBinSize,
 }
 
 /* Dump a single import stub */
-void DumpSingleImport(FILE *fp, const char *name, unsigned int addr, const unsigned char *pElfBin, 
+int DumpSingleImport(FILE *fp, const char *name, unsigned int addr, const unsigned char *pElfBin, 
 					  unsigned long iBinSize, unsigned int iBaseAddr)
 {
 	unsigned int name_addr;
@@ -549,7 +550,9 @@ void DumpSingleImport(FILE *fp, const char *name, unsigned int addr, const unsig
 	unsigned int funcs_addr;
 	const char *lib_name;
 	PspModuleImport* import;
+	int dw_count;
 
+	dw_count = 0;
 	name_addr = addr - iBaseAddr;
 	import = (PspModuleImport*) (pElfBin + name_addr);
 	
@@ -582,6 +585,7 @@ void DumpSingleImport(FILE *fp, const char *name, unsigned int addr, const unsig
 		counts = LW(import->counts);
 		f_count = (counts >> 16) & 0xFF;
 		v_count = (counts >> 8) & 0xFF;
+		dw_count = (counts & 0xFF);
 		ptr_nids = (unsigned int *) (pElfBin + nids_addr);
 
 		MakeOffset(fp, BuildName(name, "nids"), addr+12);
@@ -622,6 +626,7 @@ void DumpSingleImport(FILE *fp, const char *name, unsigned int addr, const unsig
 		MakeDword(fp, BuildName(name, "funcs"), addr+16);
 	}
 
+	return dw_count;
 }
 
 /* Dump the imports table */
@@ -641,10 +646,19 @@ void DumpImports(FILE *fp, const unsigned char *pElfBin, unsigned long iBinSize,
 		imp_loop = 0;
 		while((imp_end - imp_base) >= sizeof(PspModuleImport))
 		{
+			int count;
 			snprintf(str_import, sizeof(str_import), "import_%d", imp_loop);
-			DumpSingleImport(fp, str_import, imp_base, pElfBin, iBinSize, iBaseAddr);
-			imp_loop++;
-			imp_base += sizeof(PspModuleImport);
+			count = DumpSingleImport(fp, str_import, imp_base, pElfBin, iBinSize, iBaseAddr);
+			if(count > 0)
+			{
+				imp_loop++;
+				//imp_base += sizeof(PspModuleImport);
+				imp_base += count * 4;
+			}
+			else
+			{
+				break;
+			}
 		}
 	}
 	fprintf(fp, "}\n\n");
@@ -825,12 +839,6 @@ int main(int argc, char **argv)
 			pElfBin = ElfBuildBinary(pElf, iElfSize, &iBinSize, &iBaseAddr);
 			if(pElfBin != NULL)
 			{
-				FILE *dump;
-
-				dump = fopen("dump.bin", "wb");
-				fwrite(pElfBin, 1, iBinSize, dump);
-				fclose(dump);
-
 				DumpIDCStart(fpout);
 				DumpSections(fpout, pElf, iElfSize, pStrtab);
 				pModInfo = FindModuleInfo(fpout, pElf, iElfSize, pElfBin, iBinSize, iBaseAddr, pStrtab);
