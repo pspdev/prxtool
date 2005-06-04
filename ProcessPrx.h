@@ -31,6 +31,7 @@ public:
 	virtual ~CProcessPrx();
 	virtual bool LoadFromFile(const char *szFilename);
 	void FixupNames();
+	bool FixupPrx(FILE *fp);
 	PspModule* GetModuleInfo();
 	void SetNidMgr(CNidMgr* nidMgr);
 };

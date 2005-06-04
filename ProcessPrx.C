@@ -572,3 +572,81 @@ void CProcessPrx::SetNidMgr(CNidMgr* nidMgr)
 		m_pCurrNidMgr = nidMgr;
 	}
 }
+
+bool CProcessPrx::FixupPrx(FILE *fp)
+{
+	u8 *pElfCopy;
+	Elf32_Ehdr* pHeader;
+	ElfSection* pDataSect;
+	ElfSection* pTextSect;
+
+	/* Fixup the elf file and output it to fp */
+	if((fp == NULL) || (m_blPrxLoaded == false))
+	{
+		return false;
+	}
+
+	/* Uber hacks */
+	pDataSect = ElfFindSection(".data");
+	if(pDataSect == NULL)
+	{
+		return false;
+	}
+
+	pTextSect = ElfFindSection(".text");
+	if(pTextSect == NULL)
+	{
+		return false;
+	}
+
+	pElfCopy = new u8[m_iElfSize];
+	if(pElfCopy == NULL)
+	{
+		return false;
+	}
+	memcpy(pElfCopy, m_pElf, m_iElfSize);
+
+	/* Patch header */
+	pHeader = (Elf32_Ehdr*) pElfCopy;
+	pHeader->e_type = 2;
+
+	/* Check for relocs */
+	if(m_pElfRelocs != NULL)
+	{
+		int iLoop;
+		u32 addr;
+		u16 *pData;
+		/* Any relocs with symbol == 256 fixup to base of .data */
+
+		for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
+		{
+			if((m_pElfRelocs[iLoop].symbol == 256) && (m_pElfRelocs[iLoop].offset < pTextSect->iSize))
+			{
+
+				switch(m_pElfRelocs[iLoop].type)
+				{
+					case R_MIPS_HI16 : pData = (u16*) (pElfCopy + pTextSect->iOffset + m_pElfRelocs[iLoop].offset);
+									   addr = LH(*pData) << 16;
+									   addr = ((addr + pDataSect->iAddr) >> 16) & 0xFFFF;
+									   SH(*pData, addr);
+									break;
+					case R_MIPS_LO16 : pData = (u16*) (pElfCopy + pTextSect->iOffset + m_pElfRelocs[iLoop].offset);
+									   addr = LH(*pData);
+									   addr = (addr + pDataSect->iAddr) & 0xFFFF;
+									   SH(*pData, addr);
+
+									break;
+					default:		COutput::Printf(LEVEL_DEBUG, "Unsupported relocation type:%d\n", m_pElfRelocs[iLoop].type);
+									break;
+				};
+			}
+		}
+	}
+
+	fwrite(pElfCopy, 1, m_iElfSize, fp);
+	fflush(fp);
+
+	delete pElfCopy;
+
+	return true;
+}

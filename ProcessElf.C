@@ -228,6 +228,30 @@ ElfSection* CProcessElf::ElfFindSection(const char *szName)
 
 bool CProcessElf::LoadPrograms()
 {
+	if((m_elfHeader.iPhoff > 0) && (m_elfHeader.iPhnum > 0) && (m_elfHeader.iPhentsize > 0))
+	{
+		Elf32_Phdr *pHeader;
+		u8 *pData;
+		u32 iLoop;
+
+		pData = m_pElf + m_elfHeader.iPhoff;
+
+		COutput::Puts(LEVEL_DEBUG, "Program Headers:");
+		for(iLoop = 0; iLoop < m_elfHeader.iPhnum; iLoop++)
+		{
+			pHeader = (Elf32_Phdr *) pData;
+			COutput::Printf(LEVEL_DEBUG, "Type: %08X\n", LW(pHeader->p_type));
+			COutput::Printf(LEVEL_DEBUG, "Offset: %08X\n", LW(pHeader->p_offset));
+			COutput::Printf(LEVEL_DEBUG, "VAddr: %08X\n", LW(pHeader->p_vaddr));
+			COutput::Printf(LEVEL_DEBUG, "PAddr: %08X\n", LW(pHeader->p_paddr));
+			COutput::Printf(LEVEL_DEBUG, "FileSz: %d\n", LW(pHeader->p_filesz));
+			COutput::Printf(LEVEL_DEBUG, "MemSz: %d\n", LW(pHeader->p_memsz));
+			COutput::Printf(LEVEL_DEBUG, "Flags: %08X\n", LW(pHeader->p_flags));
+			COutput::Printf(LEVEL_DEBUG, "Align: %08X\n", LW(pHeader->p_align));
+			pData += m_elfHeader.iPhentsize;
+		}
+	}
+
 	return true;
 }
 

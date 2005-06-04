@@ -56,6 +56,44 @@ inline u16 lh_be(const u8 *ptr)
 #define LW(x) (LW_LE(x))
 #define LH(x) (LH_LE(x))
 
+inline void sw_le(u8 *ptr, u32 val)
+{
+	ptr[0] = (u8) (val & 0xFF);
+	ptr[1] = (u8) ((val >> 8) & 0xFF);
+	ptr[2] = (u8) ((val >> 16) & 0xFF);
+	ptr[3] = (u8) ((val >> 24) & 0xFF);
+}
+
+inline void sh_le(u8 *ptr, u16 val)
+{
+	ptr[0] = (u8) (val & 0xFF);
+	ptr[1] = (u8) ((val >> 8) & 0xFF);
+}
+
+inline void sw_be(u8 *ptr, u32 val)
+{
+	ptr[0] = (u8) ((val >> 24) & 0xFF);
+	ptr[1] = (u8) ((val >> 16) & 0xFF);
+	ptr[2] = (u8) ((val >> 8) & 0xFF);
+	ptr[3] = (u8) (val & 0xFF);
+}
+
+inline void sh_be(u8 *ptr, u16 val)
+{
+	ptr[0] = (u8) ((val >> 8) & 0xFF);
+	ptr[1] = (u8) (val & 0xFF);
+}
+
+/* Should be different for different architectures */
+/* Should read X as a little endian word and return the native word */
+#define SW_LE(x, v) (sw_le((u8*) &(x), (v)))
+#define SW_BE(x, v) (sw_be((u8*) &(x), (v)))
+#define SH_LE(x, v) (sh_le((u8*) &(x), (v)))
+#define SH_BE(x, v) (sh_be((u8*) &(x), (v)))
+#define SW(x, v) (SW_LE(x, v))
+#define SH(x, v) (SH_LE(x, v))
+
+
 /* Do a safe alloc which should work on vc6 or latest gcc etc */
 /* If alloc fails will always return NULL */
 #define SAFE_ALLOC(p, t) try { (p) = new t; } catch(...) { (p) = NULL; }

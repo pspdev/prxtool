@@ -119,9 +119,8 @@ int main(int argc, char **argv)
 							  break;
 			case OUTPUT_IDC : pSer = new CSerializePrxToIdc(out_fp);
 							  break;
-			default			: pSer = new CSerializePrxToIdc(out_fp);
-							  break;
-							  
+			default: pSer = NULL;
+					 break;
 		};
 
 		if(prx.LoadFromFile(g_pInfile) == false)
@@ -130,9 +129,19 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			pSer->Serialize(prx);
-			delete pSer;
-			pSer = NULL;
+			if(pSer != NULL)
+			{
+				pSer->Serialize(prx);
+				delete pSer;
+				pSer = NULL;
+			}
+			else if(g_outputMode == OUTPUT_ELF)
+			{
+				if(prx.FixupPrx(out_fp) == false)
+				{
+					COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up ELF\n");
+				}
+			}
 		}
 
 		if((g_pOutfile != NULL) && (out_fp != NULL))
