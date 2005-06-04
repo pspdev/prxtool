@@ -208,30 +208,34 @@ bool CProcessPrx::LoadImports()
 
 	imp_base = m_modInfo.info.imports;
 	imp_end =  m_modInfo.info.imp_end;
-	while((imp_end - imp_base) >= sizeof(PspModuleImport))
+
+	if(imp_base != 0)
 	{
-		u32 count;
-		PspModuleImport *pImport;
-
-		pImport = (PspModuleImport*) m_vMem.GetPtr(imp_base);
-
-		if(pImport != NULL)
+		while((imp_end - imp_base) >= sizeof(PspModuleImport))
 		{
-			count = LoadSingleImport(pImport, imp_base);
-			if(count > 0)
+			u32 count;
+			PspModuleImport *pImport;
+
+			pImport = (PspModuleImport*) m_vMem.GetPtr(imp_base);
+
+			if(pImport != NULL)
 			{
-				imp_base += (count * sizeof(u32));
+				count = LoadSingleImport(pImport, imp_base);
+				if(count > 0)
+				{
+					imp_base += (count * sizeof(u32));
+				}
+				else
+				{
+					blRet = false;
+					break;
+				}
 			}
 			else
 			{
 				blRet = false;
 				break;
 			}
-		}
-		else
-		{
-			blRet = false;
-			break;
 		}
 	}
 
@@ -371,30 +375,33 @@ bool CProcessPrx::LoadExports()
 
 	exp_base = m_modInfo.info.exports;
 	exp_end =  m_modInfo.info.exp_end;
-	while((exp_end - exp_base) >= sizeof(PspModuleExport))
+	if(exp_base != 0)
 	{
-		u32 count;
-		PspModuleExport *pExport;
-
-		pExport = (PspModuleExport*) m_vMem.GetPtr(exp_base);
-
-		if(pExport != NULL)
+		while((exp_end - exp_base) >= sizeof(PspModuleExport))
 		{
-			count = LoadSingleExport(pExport, exp_base);
-			if(count > 0)
+			u32 count;
+			PspModuleExport *pExport;
+
+			pExport = (PspModuleExport*) m_vMem.GetPtr(exp_base);
+
+			if(pExport != NULL)
 			{
-				exp_base += (count * sizeof(u32));
+				count = LoadSingleExport(pExport, exp_base);
+				if(count > 0)
+				{
+					exp_base += (count * sizeof(u32));
+				}
+				else
+				{
+					blRet = false;
+					break;
+				}
 			}
 			else
 			{
 				blRet = false;
 				break;
 			}
-		}
-		else
-		{
-			blRet = false;
-			break;
 		}
 	}
 
@@ -442,8 +449,6 @@ void CProcessPrx::FixupNames()
 {
 	if(m_blPrxLoaded)
 	{
-		assert(m_modInfo.exp_head != NULL);
-		assert(m_modInfo.imp_head != NULL);
 	}
 }
 
@@ -649,4 +654,10 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 	delete pElfCopy;
 
 	return true;
+}
+
+ElfReloc* CProcessPrx::GetRelocs(int &iCount)
+{
+	iCount = m_iRelocCount;
+	return m_pElfRelocs;
 }

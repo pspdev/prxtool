@@ -33,6 +33,7 @@ public:
 	void FixupNames();
 	bool FixupPrx(FILE *fp);
 	PspModule* GetModuleInfo();
+	ElfReloc* GetRelocs(int &iCount);
 	void SetNidMgr(CNidMgr* nidMgr);
 };
 

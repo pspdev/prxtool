@@ -1,9 +1,11 @@
 #include <stdio.h>
+#include <string.h>
 #include "SerializePrx.h"
 #include "output.h"
 
 CSerializePrx::CSerializePrx()
 {
+	m_blStarted = false;
 }
 
 CSerializePrx::~CSerializePrx()
@@ -33,28 +35,6 @@ void CSerializePrx::DoSects(CProcessPrx &prx)
 	}
 
 	if(EndSects() == false)
-	{
-		throw false;
-	}
-}
-
-void CSerializePrx::DoModule(CProcessPrx &prx)
-{
-	PspModule *pMod;
-
-	if(StartModule() == false)
-	{
-		throw false;
-	}
-
-	pMod = prx.GetModuleInfo();
-
-	if(SerializeModule(pMod) == false)
-	{
-		throw false;
-	}
-
-	if(EndModule() == false)
 	{
 		throw false;
 	}
@@ -122,17 +102,91 @@ void CSerializePrx::DoExports(CProcessPrx &prx)
 	{
 		throw false;
 	}
-
 }
 
 void CSerializePrx::DoRelocs(CProcessPrx &prx)
 {
-	/* Atm do nothing */
+	ElfReloc* pRelocs;
+	int iCount;
+
+	if(StartRelocs() == false)
+	{
+		throw false;
+	}
+			
+	pRelocs = prx.GetRelocs(iCount);
+	if(pRelocs != NULL)
+	{
+		/* Process the relocs a segment at a time */
+		const char *pCurrSec;
+		int iCurrCount;
+
+		while(iCount > 0)
+		{
+			ElfReloc *pBase;
+
+			pBase = pRelocs;
+			pCurrSec = pRelocs->secname;
+			iCurrCount = 0;
+			while((iCount > 0) && (strcmp(pCurrSec, pRelocs->secname) == 0))
+			{
+				pRelocs++;
+				iCurrCount++;
+				iCount--;
+			}
+
+			if(iCurrCount > 0)
+			{
+				if(SerializeReloc(iCurrCount, pBase) == false)
+				{
+					throw false;
+				}
+			}
+		}
+	}
+
+	if(EndRelocs() == false)
+	{
+		throw false;
+	}
 }
 
-bool CSerializePrx::Serialize(CProcessPrx &prx)
+bool CSerializePrx::Begin()
+{
+	if(StartFile() == false)
+	{
+		return false;
+	}
+
+	m_blStarted = true;
+
+	return true;
+}
+
+bool CSerializePrx::End()
+{
+	bool blRet = true;
+	if(m_blStarted == true)
+	{
+		blRet = EndFile();
+		m_blStarted = false;
+	}
+
+	return blRet;
+}
+
+bool CSerializePrx::SerializePrx(CProcessPrx &prx, u32 iSMask)
 {
 	bool blRet = false;
+
+	if(m_blStarted == false)
+	{
+		if(Begin() != true)
+		{
+			COutput::Puts(LEVEL_ERROR, "Failed to begin the serialized output");
+			return false;
+		}
+	}
 
 	try
 	{
@@ -140,11 +194,11 @@ bool CSerializePrx::Serialize(CProcessPrx &prx)
 		PspModule *pMod;
 		u32 iSectNum;
 
+		m_currPrx = &prx;
 		pMod = prx.GetModuleInfo();
-		if((pMod == NULL) || (pMod->exp_head == NULL) || (pMod->imp_head == NULL))
+		if(pMod == NULL)
 		{
-			COutput::Printf(LEVEL_ERROR, "Invalid module info pMod %p, exp_head %p, imp_head %p\n", 
-					pMod, pMod != NULL ? pMod->exp_head : NULL, pMod != NULL ? pMod->imp_head : NULL);
+			COutput::Printf(LEVEL_ERROR, "Invalid module info pMod\n");
 			throw false;
 		}
 
@@ -154,18 +208,34 @@ bool CSerializePrx::Serialize(CProcessPrx &prx)
 			throw false;
 		}
 
-		if(StartFile(prx.GetElfName()) == false)
+		if(StartPrx(prx.GetElfName(), pMod, iSMask) == false)
 		{
 			throw false;
 		}
 
-		DoModule(prx);
-		DoSects(prx);
-		DoImports(prx);
-		DoExports(prx);
-		DoRelocs(prx);
+		//DoModule(prx);
 
-		if(EndFile() == false)
+		if(iSMask & SERIALIZE_SECTIONS)
+		{
+			DoSects(prx);
+		}
+
+		if(iSMask & SERIALIZE_IMPORTS)
+		{
+			DoImports(prx);
+		}
+
+		if(iSMask & SERIALIZE_EXPORTS)
+		{
+			DoExports(prx);
+		}
+
+		if(iSMask & SERIALIZE_RELOCS)
+		{
+			DoRelocs(prx);
+		}
+
+		if(EndPrx() == false)
 		{
 			throw false;
 		}

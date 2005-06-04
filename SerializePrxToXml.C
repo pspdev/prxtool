@@ -11,21 +11,35 @@ CSerializePrxToXml::~CSerializePrxToXml()
 	fflush(m_fpOut);
 }
 
-bool CSerializePrxToXml::StartFile(const char *szFilename)
+bool CSerializePrxToXml::StartFile()
 {
 	fprintf(m_fpOut, "<?xml version=\"1.0\" ?>\n");
 	fprintf(m_fpOut, "<PSPLIBDOC>\n");
 	fprintf(m_fpOut, "\t<PRXFILES>\n");
-	fprintf(m_fpOut, "\t\t<PRX>%s</PRX>\n", szFilename);
 
 	return true;
 }
 
 bool CSerializePrxToXml::EndFile()
 {
-	fprintf(m_fpOut, "\t\t</LIBRARIES>\n");
 	fprintf(m_fpOut, "\t</PRXFILES>\n");
 	fprintf(m_fpOut, "</PSPLIBDOC>\n");
+	return true;
+}
+
+bool CSerializePrxToXml::StartPrx(const char *szFilename, const PspModule *mod, u32 iSMask)
+{
+	fprintf(m_fpOut, "\t\t<PRXFILE>\n");
+	fprintf(m_fpOut, "\t\t<PRX>%s</PRX>\n", szFilename);
+	fprintf(m_fpOut, "\t\t<PRXNAME>%s</PRXNAME>\n", mod->name);
+	fprintf(m_fpOut, "\t\t<LIBRARIES>\n");
+	return true;
+}
+
+bool CSerializePrxToXml::EndPrx()
+{
+	fprintf(m_fpOut, "\t\t</LIBRARIES>\n");
+	fprintf(m_fpOut, "\t\t</PRXFILE>\n");
 	return true;
 }
 
@@ -45,25 +59,6 @@ bool CSerializePrxToXml::SerializeSect(int num, ElfSection &sect)
 bool CSerializePrxToXml::EndSects()
 {
 	/* Do nothing for this in XML */
-	return true;
-}
-
-bool CSerializePrxToXml::StartModule()
-{
-	/* Do nothing for this in XML */
-	return true;
-}
-
-bool CSerializePrxToXml::SerializeModule(const PspModule *mod)
-{
-	fprintf(m_fpOut, "\t\t<PRXNAME>%s</PRXNAME>\n", mod->name);
-
-	return true;
-}
-
-bool CSerializePrxToXml::EndModule()
-{
-	fprintf(m_fpOut, "\t\t<LIBRARIES>\n");
 	return true;
 }
 
@@ -101,10 +96,10 @@ bool CSerializePrxToXml::SerializeImport(int num, const PspLibImport *imp)
 
 		for(iLoop = 0; iLoop < imp->v_count; iLoop++)
 		{
-			fprintf(m_fpOut, "\t\t\t\t\t<FUNCTION>\n");
+			fprintf(m_fpOut, "\t\t\t\t\t<VARIABLE>\n");
 			fprintf(m_fpOut, "\t\t\t\t\t\t<NID>0x%08X</NID>\n", imp->vars[iLoop].nid);
 			fprintf(m_fpOut, "\t\t\t\t\t\t<NAME>%s</NAME>\n", imp->vars[iLoop].name);
-			fprintf(m_fpOut, "\t\t\t\t\t</FUNCTION>\n");
+			fprintf(m_fpOut, "\t\t\t\t\t</VARIABLE>\n");
 		}
 		fprintf(m_fpOut, "\t\t\t\t</VARIABLES>\n");
 	}
@@ -152,10 +147,10 @@ bool CSerializePrxToXml::SerializeExport(int num, const PspLibExport *exp)
 		fprintf(m_fpOut, "\t\t\t\t<VARIABLES>\n");
 		for(iLoop = 0; iLoop < exp->v_count; iLoop++)
 		{
-			fprintf(m_fpOut, "\t\t\t\t\t<FUNCTION>\n");
+			fprintf(m_fpOut, "\t\t\t\t\t<VARIABLE>\n");
 			fprintf(m_fpOut, "\t\t\t\t\t\t<NID>0x%08X</NID>\n", exp->vars[iLoop].nid);
 			fprintf(m_fpOut, "\t\t\t\t\t\t<NAME>%s</NAME>\n", exp->vars[iLoop].name);
-			fprintf(m_fpOut, "\t\t\t\t\t</FUNCTION>\n");
+			fprintf(m_fpOut, "\t\t\t\t\t</VARIABLE>\n");
 		}
 		fprintf(m_fpOut, "\t\t\t\t</VARIABLES>\n");
 	}
@@ -175,7 +170,7 @@ bool CSerializePrxToXml::StartRelocs()
 	return true;
 }
 
-bool CSerializePrxToXml::SerializeReloc()
+bool CSerializePrxToXml::SerializeReloc(int count, const ElfReloc *rel)
 {
 	return true;
 }

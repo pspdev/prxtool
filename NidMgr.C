@@ -4,6 +4,7 @@
 #include "NidMgr.h"
 
 CNidMgr::CNidMgr()
+	: m_pLibHead(NULL)
 {
 }
 

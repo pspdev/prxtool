@@ -8,14 +8,13 @@ class CSerializePrxToXml : public CSerializePrx
 {
 	FILE *m_fpOut;
 
-	virtual bool StartFile(const char *szFilename);
+	virtual bool StartFile();
 	virtual bool EndFile();
+	virtual bool StartPrx(const char *szFilename, const PspModule *mod, u32 iSMask);
+	virtual bool EndPrx();
 	virtual bool StartSects();
 	virtual bool SerializeSect(int num, ElfSection &sect);
 	virtual bool EndSects();
-	virtual bool StartModule();
-	virtual bool SerializeModule(const PspModule *mod);
-	virtual bool EndModule();
 	virtual bool StartImports();
 	virtual bool SerializeImport(int num, const PspLibImport *imp);
 	virtual bool EndImports();
@@ -23,7 +22,7 @@ class CSerializePrxToXml : public CSerializePrx
 	virtual bool SerializeExport(int num, const PspLibExport *exp);
 	virtual bool EndExports();
 	virtual bool StartRelocs();
-	virtual bool SerializeReloc();
+	virtual bool SerializeReloc(int count, const ElfReloc *rel);
 	virtual bool EndRelocs();
 
 public:

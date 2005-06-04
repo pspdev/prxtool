@@ -55,20 +55,60 @@ CSerializePrxToIdc::~CSerializePrxToIdc()
 	fflush(m_fpOut);
 }
 
-bool CSerializePrxToIdc::StartFile(const char *szFilename)
+bool CSerializePrxToIdc::StartFile()
 {
+	return true;
+}
+
+bool CSerializePrxToIdc::EndFile()
+{
+	/* Do nothing */
+	return true;
+}
+
+bool CSerializePrxToIdc::StartPrx(const char* szFilename, const PspModule *mod, u32 iSMask)
+{
+	u32 addr;
+
 	fprintf(m_fpOut, "#include <idc.idc>\n\n");
 	fprintf(m_fpOut, "static main() {\n");
-	fprintf(m_fpOut, "   createSegments();\n");
+	if(iSMask & SERIALIZE_SECTIONS)
+	{
+		fprintf(m_fpOut, "   createSegments();\n");
+	}
 	fprintf(m_fpOut, "   createModuleInfo();\n");
-	fprintf(m_fpOut, "   createExports(); \n");
-	fprintf(m_fpOut, "   createImports(); \n");
+	if(iSMask & SERIALIZE_EXPORTS)
+	{
+		fprintf(m_fpOut, "   createExports(); \n");
+	}
+	if(iSMask & SERIALIZE_IMPORTS)
+	{
+		fprintf(m_fpOut, "   createImports(); \n");
+	}
+	if(iSMask & SERIALIZE_RELOCS)
+	{
+		fprintf(m_fpOut, "   createRelocs();  \n");
+	}
+	fprintf(m_fpOut, "}\n\n");
+
+	fprintf(m_fpOut, "static createModuleInfo() {\n");
+
+	addr = mod->addr;
+
+	MakeDword(m_fpOut, "_module_flags", addr);
+	MakeString(m_fpOut, "_module_name", addr+4);
+	MakeDword(m_fpOut, "_module_gp", addr+32);
+	MakeOffset(m_fpOut, "_module_exports", addr+36);
+	MakeOffset(m_fpOut, "_module_exp_end", addr+40);
+	MakeOffset(m_fpOut, "_module_imports", addr+44);
+	MakeOffset(m_fpOut, "_module_imp_end", addr+48);
+
 	fprintf(m_fpOut, "}\n\n");
 
 	return true;
 }
 
-bool CSerializePrxToIdc::EndFile()
+bool CSerializePrxToIdc::EndPrx()
 {
 	/* Do nothing */
 	return true;
@@ -122,35 +162,6 @@ bool CSerializePrxToIdc::SerializeSect(int num, ElfSection &sect)
 }
 
 bool CSerializePrxToIdc::EndSects()
-{
-	fprintf(m_fpOut, "}\n\n");
-	return true;
-}
-
-bool CSerializePrxToIdc::StartModule()
-{
-	fprintf(m_fpOut, "static createModuleInfo() {\n");
-	return true;
-}
-
-bool CSerializePrxToIdc::SerializeModule(const PspModule *mod)
-{
-	u32 addr;
-
-	addr = mod->addr;
-
-	MakeDword(m_fpOut, "_module_flags", addr);
-	MakeString(m_fpOut, "_module_name", addr+4);
-	MakeDword(m_fpOut, "_module_gp", addr+32);
-	MakeOffset(m_fpOut, "_module_exports", addr+36);
-	MakeOffset(m_fpOut, "_module_exp_end", addr+40);
-	MakeOffset(m_fpOut, "_module_imports", addr+44);
-	MakeOffset(m_fpOut, "_module_imp_end", addr+48);
-
-	return true;
-}
-
-bool CSerializePrxToIdc::EndModule()
 {
 	fprintf(m_fpOut, "}\n\n");
 	return true;
@@ -260,16 +271,24 @@ bool CSerializePrxToIdc::EndExports()
 
 bool CSerializePrxToIdc::StartRelocs()
 {
+	fprintf(m_fpOut, "static createRelocs() {\n");
 	return true;
 }
 
-bool CSerializePrxToIdc::SerializeReloc()
+bool CSerializePrxToIdc::SerializeReloc(int count, const ElfReloc *rel)
 {
+	ElfSection *pDataSect, *pTextSect;
+
+	pDataSect = m_currPrx->ElfFindSection(".data");
+	pTextSect = m_currPrx->ElfFindSection(".text");
+
+	fprintf(stderr, "Reloc count %d, %s, data %p, text %p\n", count, rel->secname, pDataSect, pTextSect);
 	return true;
 }
 
 bool CSerializePrxToIdc::EndRelocs()
 {
+	fprintf(m_fpOut, "}\n\n");
 	return true;
 }
 

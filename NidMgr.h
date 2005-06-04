@@ -3,7 +3,7 @@
 
 #include "types.h"
 
-#define LIB_NAME_MAX 32
+#define LIB_NAME_MAX 64
 #define LIB_SYMBOL_NAME_MAX 128
 
 struct LibraryNid
@@ -23,6 +23,10 @@ struct LibraryEntry
 
 class CNidMgr
 {
+	LibraryEntry *m_pLibHead;
+	char m_szCurrName[LIB_SYMBOL_NAME_MAX];
+
+	void FreeMemory();
 public:
 	CNidMgr();
 	~CNidMgr();
