@@ -130,7 +130,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-s ixrs    : Specify what to serialize (Imports,Exports,Relocs,Sections)\n");
 	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
 	COutput::Printf(LEVEL_INFO, "\n");
-	COutput::Printf(LEVEL_INFO, "Example: irxtool -o output.idc -s xr myfile.prx\n");
+	COutput::Printf(LEVEL_INFO, "Example: prxtool -o output.idc -s xr myfile.prx\n");
 	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
 }
 
@@ -177,11 +177,11 @@ int main(int argc, char **argv)
 	FILE *out_fp;
 
 	out_fp = stdout;
+	COutput::SetOutputHandler(DoOutput);
 
 	if(process_args(argc, argv))
 	{
 		COutput::SetDebug(g_blDebug);
-		COutput::SetOutputHandler(DoOutput);
 		if(g_pOutfile != NULL)
 		{
 			out_fp = fopen(g_pOutfile, "w");
