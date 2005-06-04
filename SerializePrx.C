@@ -154,7 +154,7 @@ bool CSerializePrx::Serialize(CProcessPrx &prx)
 			throw false;
 		}
 
-		if(StartFile("") == false)
+		if(StartFile(prx.GetElfName()) == false)
 		{
 			throw false;
 		}

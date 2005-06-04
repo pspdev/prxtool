@@ -5,10 +5,29 @@
 #include "VirtualMem.h"
 #include "output.h"
 
+static const char* g_szRelTypes[13] = 
+{
+	"R_NONE",
+	"R_16",
+	"R_32",
+	"R_REL32",
+	"R_26",
+	"R_HI16",
+	"R_LO16",
+	"R_GPREL16",
+	"R_LITERAL",
+	"R_GOT16",
+	"R_PC16",
+	"R_CALL16",
+	"R_GPREL32"
+};
+
 CProcessPrx::CProcessPrx()
 	: CProcessElf()
 	, m_defNidMgr()
 	, m_pCurrNidMgr(&m_defNidMgr)
+	, m_pElfRelocs(NULL)
+	, m_iRelocCount(0)
 {
 	memset(&m_modInfo, 0, sizeof(PspModule));
 	m_blPrxLoaded = false;
@@ -42,6 +61,13 @@ void CProcessPrx::FreeMemory()
 		delete pImport;
 		pImport = pNext;
 	}
+
+	if(m_pElfRelocs != NULL)
+	{
+		delete m_pElfRelocs;
+		m_pElfRelocs = NULL;
+	}
+	m_iRelocCount = 0;
 
 	/* Check the import and export lists and free */
 	memset(&m_modInfo, 0, sizeof(PspModule));
@@ -421,6 +447,82 @@ void CProcessPrx::FixupNames()
 	}
 }
 
+bool CProcessPrx::LoadRelocs()
+{
+	bool blRet = false;
+	int  iRelocCount = 0;
+	int  iLoop;
+
+	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+	{
+		if(m_pElfSections[iLoop].iType == SHT_PRXRELOC)
+		{
+			if(m_pElfSections[iLoop].iSize % sizeof(Elf32_Rel))
+			{
+				COutput::Printf(LEVEL_DEBUG, "Relocation section invalid\n");
+			}
+
+			iRelocCount += m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel);
+		}
+	}
+
+	COutput::Printf(LEVEL_DEBUG, "Relocation entries %d\n", iRelocCount);
+
+	if(iRelocCount > 0)
+	{
+		SAFE_ALLOC(m_pElfRelocs, ElfReloc[iRelocCount]);
+		if(m_pElfRelocs != NULL)
+		{
+			const Elf32_Rel *reloc;
+			int iCurrRel = 0;
+			u32 iRelLoop;
+
+			memset(m_pElfRelocs, 0, sizeof(ElfReloc) * iRelocCount);
+			for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+			{
+				if(m_pElfSections[iLoop].iType == SHT_PRXRELOC)
+				{
+					reloc = (Elf32_Rel*) m_pElfSections[iLoop].pData;
+					for(iRelLoop = 0; iRelLoop < (m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel)); iRelLoop++)
+					{
+						m_pElfRelocs[iCurrRel].secname = m_pElfSections[iLoop].szName;
+						m_pElfRelocs[iCurrRel].base = 0;
+						m_pElfRelocs[iCurrRel].type = ELF32_R_TYPE(reloc->r_info);
+						m_pElfRelocs[iCurrRel].symbol = ELF32_R_SYM(reloc->r_info);
+						m_pElfRelocs[iCurrRel].offset = reloc->r_offset;
+						iCurrRel++;
+						reloc++;
+					}
+				}
+			}
+
+			m_iRelocCount = iCurrRel;
+			blRet = true;
+			
+			if(COutput::GetDebug())
+			{
+				for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
+				{
+					if(m_pElfRelocs[iLoop].type < 13)
+					{
+						COutput::Printf(LEVEL_DEBUG, "Reloc %s:%d Type:%s Symbol:%d Offset %08X\n", 
+								m_pElfRelocs[iLoop].secname, iLoop, g_szRelTypes[m_pElfRelocs[iLoop].type],
+								m_pElfRelocs[iLoop].symbol, m_pElfRelocs[iLoop].offset);
+					}
+					else
+					{
+						COutput::Printf(LEVEL_DEBUG, "Reloc %s:%d Type:%d Symbol:%d Offset %08X\n", 
+								m_pElfRelocs[iLoop].secname, iLoop, m_pElfRelocs[iLoop].type,
+								m_pElfRelocs[iLoop].symbol, m_pElfRelocs[iLoop].offset);
+					}
+				}
+			}
+		}
+	}
+
+	return blRet;
+}
+
 bool CProcessPrx::LoadFromFile(const char *szFilename)
 {
 	bool blRet = false;
@@ -437,7 +539,7 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 		pInfoSect = ElfFindSection(PSP_MODULE_INFO_NAME);
 		if(pInfoSect != NULL)
 		{
-			if((FillModule(pInfoSect)) && (LoadExports()) && (LoadImports()))
+			if((FillModule(pInfoSect)) && (LoadExports()) && (LoadImports()) && (LoadRelocs()))
 			{
 				COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
 				blRet = true;

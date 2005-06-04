@@ -82,8 +82,10 @@ struct ElfReloc
 	u32 type;
 	/* Symbol (if known) */
 	u32 symbol;
-	/* Offset */
+	/* Offset into the file */
 	u32 offset;
+	/* New Address for the relocation (to do with what you will) */
+	u32 addr;
 };
 
 /* Define ELF types */

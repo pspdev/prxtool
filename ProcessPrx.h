@@ -14,6 +14,10 @@ class CProcessPrx : public CProcessElf
 	CNidMgr*  m_pCurrNidMgr;
 	CVirtualMem m_vMem;
 	bool m_blPrxLoaded;
+	/* Pointer to the allocated relocation entries, if available */
+	ElfReloc  *m_pElfRelocs;
+	/* Number of relocations */
+	int m_iRelocCount;
 
 	bool FillModule(ElfSection *pInfoSect);
 	void FreeMemory();
@@ -21,6 +25,7 @@ class CProcessPrx : public CProcessElf
 	bool LoadImports();
 	int  LoadSingleExport(PspModuleExport *pExport, u32 addr);
 	bool LoadExports();
+	bool LoadRelocs();
 public:
 	CProcessPrx();
 	virtual ~CProcessPrx();

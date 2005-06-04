@@ -28,10 +28,6 @@ protected:
 	ElfSection *m_pElfStrtab;
 	/* Holds the elf header information */
 	ElfHeader m_elfHeader;
-	/* Pointer to the allocated relocation entries, if available */
-	ElfReloc  *m_pElfRelocs;
-	/* Number of relocations */
-	int m_iRelocCount;
 
 	/* The base address of the ELF */
 	u32 m_iBaseAddr;
@@ -45,7 +41,6 @@ protected:
 	bool FillSection(ElfSection& elfSect, const Elf32_Shdr *pSection);
 	void ElfDumpSections();
 	bool LoadSections();
-	bool LoadRelocs();
 	void FreeMemory();
 public:
 	/** Default constructor */
@@ -64,6 +59,8 @@ public:
 	u32 ElfGetLoadSize();
 	/** Get the section headers */
 	ElfSection* ElfGetSections(u32 &iSHCount);
+	/** Get the file name of the loaded elf */
+	const char* GetElfName();
 };
 
 #endif
