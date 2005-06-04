@@ -17,6 +17,7 @@ enum OutputMode
 static char **g_ppInfiles;
 static int  g_iInFiles;
 static char *g_pOutfile;
+static char *g_pNamefile;
 static bool g_blDebug;
 static OutputMode g_outputMode;
 static u32 g_iSMask;
@@ -43,6 +44,7 @@ void init_args()
 	g_ppInfiles = NULL;
 	g_iInFiles = 0;
 	g_pOutfile = NULL;
+	g_pNamefile = NULL;
 	g_blDebug = false;
 	g_outputMode = OUTPUT_IDC;
 	g_iSMask = SERIALIZE_ALL;
@@ -53,7 +55,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xcpdo:s:")) != -1)
+	while((ch = getopt(argc, argv, "xcpdo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -66,6 +68,8 @@ int process_args(int argc, char **argv)
 			case 'c' : g_outputMode = OUTPUT_IDC;
 					   break;
 			case 'o' : g_pOutfile = optarg;
+					   break;
+			case 'n' : g_pNamefile = optarg;
 					   break;
 			case 's' : {
 						   int i;
@@ -115,18 +119,19 @@ int process_args(int argc, char **argv)
 
 void print_help()
 {
-	fprintf(stderr, "Usage: prxtool [options...] prxfile\n");
-	fprintf(stderr, "Options:\n");
-	fprintf(stderr, "-o outfile : Output file. If not specified uses stdout\n");
-	fprintf(stderr, "-c         : Output an IDC file (default)\n");
-	fprintf(stderr, "-x         : Output an XML file\n");
-	fprintf(stderr, "-p         : Output a patched ELF file\n");
-	fprintf(stderr, "-t         : Output a text file containing a list of nids\n");
-	fprintf(stderr, "-d         : Enable debug mode\n");
-	fprintf(stderr, "-s ixrs    : Specify what to serialize (Imports,Exports,Relocs,Sections)\n");
-	fprintf(stderr, "\n");
-	fprintf(stderr, "Example: irxtool -o output.idc -s xr myfile.prx\n");
-	fprintf(stderr, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
+	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] prxfile\n");
+	COutput::Printf(LEVEL_INFO, "Options:\n");
+	COutput::Printf(LEVEL_INFO, "-o outfile : Output file. If not specified uses stdout\n");
+	COutput::Printf(LEVEL_INFO, "-c         : Output an IDC file (default)\n");
+	COutput::Printf(LEVEL_INFO, "-x         : Output an XML file\n");
+	COutput::Printf(LEVEL_INFO, "-p         : Output a patched ELF file\n");
+	COutput::Printf(LEVEL_INFO, "-t         : Output a text file containing a list of nids\n");
+	COutput::Printf(LEVEL_INFO, "-d         : Enable debug mode\n");
+	COutput::Printf(LEVEL_INFO, "-s ixrs    : Specify what to serialize (Imports,Exports,Relocs,Sections)\n");
+	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
+	COutput::Printf(LEVEL_INFO, "\n");
+	COutput::Printf(LEVEL_INFO, "Example: irxtool -o output.idc -s xr myfile.prx\n");
+	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
 }
 
 void output_elf(const char *file, FILE *out_fp)
@@ -147,12 +152,13 @@ void output_elf(const char *file, FILE *out_fp)
 	}
 }
 
-void serialize_file(const char *file, CSerializePrx *pSer)
+void serialize_file(const char *file, CSerializePrx *pSer, CNidMgr *pNids)
 {
 	CProcessPrx prx;
 
 	assert(pSer != NULL);
 
+	prx.SetNidMgr(pNids);
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	if(prx.LoadFromFile(file) == false)
 	{
@@ -167,6 +173,7 @@ void serialize_file(const char *file, CSerializePrx *pSer)
 int main(int argc, char **argv)
 {
 	CSerializePrx *pSer;
+	CNidMgr nids;
 	FILE *out_fp;
 
 	out_fp = stdout;
@@ -195,6 +202,11 @@ int main(int argc, char **argv)
 					 break;
 		};
 
+		if((g_pNamefile != NULL) && (pSer != NULL))
+		{
+			(void) nids.AddXmlFile(g_pNamefile);
+		}
+
 		if(g_outputMode == OUTPUT_ELF)
 		{
 			output_elf(g_ppInfiles[0], out_fp);
@@ -206,7 +218,7 @@ int main(int argc, char **argv)
 			pSer->Begin();
 			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
 			{
-				serialize_file(g_ppInfiles[iLoop], pSer);
+				serialize_file(g_ppInfiles[iLoop], pSer, &nids);
 			}
 			pSer->End();
 

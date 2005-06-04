@@ -502,7 +502,6 @@ bool CProcessPrx::LoadRelocs()
 			}
 
 			m_iRelocCount = iCurrRel;
-			blRet = true;
 			
 			if(COutput::GetDebug())
 			{
@@ -524,6 +523,8 @@ bool CProcessPrx::LoadRelocs()
 			}
 		}
 	}
+
+	blRet = true;
 
 	return blRet;
 }

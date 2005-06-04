@@ -2,13 +2,13 @@
 #define __NIDMGR_H__
 
 #include "types.h"
+#include <tinyxml.h>
 
 #define LIB_NAME_MAX 64
 #define LIB_SYMBOL_NAME_MAX 128
 
 struct LibraryNid
 {
-	struct LibraryNid* pNext;
 	u32 nid;
 	char name[LIB_SYMBOL_NAME_MAX];
 };
@@ -18,15 +18,20 @@ struct LibraryEntry
 	struct LibraryEntry* pNext;
 	char lib_name[LIB_NAME_MAX];
 	int  entry_count;
-	LibraryNid *pHead;
+	LibraryNid *pNids;
 };
 
 class CNidMgr
 {
 	LibraryEntry *m_pLibHead;
 	char m_szCurrName[LIB_SYMBOL_NAME_MAX];
-
+	const char *GenName(const char *lib, u32 nid);
+	const char *SearchLibs(const char *lib, u32 nid);
 	void FreeMemory();
+	const char* ReadNid(TiXmlElement *pElement, u32 &nid);
+	int CountNids(TiXmlElement *pElement, const char *name);
+	void ProcessLibrary(TiXmlElement *pLibrary);
+	void ProcessPrxfile(TiXmlElement *pPrxfile);
 public:
 	CNidMgr();
 	~CNidMgr();
