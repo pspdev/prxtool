@@ -97,6 +97,7 @@ bool CSerializePrxToXml::SerializeImport(int num, const PspLibImport *imp)
 
 	if(imp->v_count > 0)
 	{
+		fprintf(m_fpOut, "\t\t\t\t<VARIABLES>\n");
 
 		for(iLoop = 0; iLoop < imp->v_count; iLoop++)
 		{
@@ -105,6 +106,7 @@ bool CSerializePrxToXml::SerializeImport(int num, const PspLibImport *imp)
 			fprintf(m_fpOut, "\t\t\t\t\t\t<NAME>%s</NAME>\n", imp->vars[iLoop].name);
 			fprintf(m_fpOut, "\t\t\t\t\t</FUNCTION>\n");
 		}
+		fprintf(m_fpOut, "\t\t\t\t</VARIABLES>\n");
 	}
 
 	fprintf(m_fpOut, "\t\t\t</LIBRARY>\n");
@@ -147,6 +149,7 @@ bool CSerializePrxToXml::SerializeExport(int num, const PspLibExport *exp)
 
 	if(exp->v_count > 0)
 	{
+		fprintf(m_fpOut, "\t\t\t\t<VARIABLES>\n");
 		for(iLoop = 0; iLoop < exp->v_count; iLoop++)
 		{
 			fprintf(m_fpOut, "\t\t\t\t\t<FUNCTION>\n");
@@ -154,6 +157,7 @@ bool CSerializePrxToXml::SerializeExport(int num, const PspLibExport *exp)
 			fprintf(m_fpOut, "\t\t\t\t\t\t<NAME>%s</NAME>\n", exp->vars[iLoop].name);
 			fprintf(m_fpOut, "\t\t\t\t\t</FUNCTION>\n");
 		}
+		fprintf(m_fpOut, "\t\t\t\t</VARIABLES>\n");
 	}
 
 	fprintf(m_fpOut, "\t\t\t</LIBRARY>\n");
