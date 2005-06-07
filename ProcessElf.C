@@ -176,7 +176,9 @@ bool CProcessElf::ElfValidateHeader()
 			iShend = m_elfHeader.iShoff + (m_elfHeader.iShentsize * m_elfHeader.iShnum);
 		}
 
-		if((iPhend < m_iElfSize) && (iShend < m_iElfSize))
+		COutput::Printf(LEVEL_DEBUG, "%08X, %08X, %08X\n", iPhend, iShend, m_iElfSize);
+
+		if((iPhend <= m_iElfSize) && (iShend <= m_iElfSize))
 		{
 			blRet = true;
 		}
