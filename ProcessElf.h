@@ -32,6 +32,8 @@ protected:
 	/* The base address of the ELF */
 	u32 m_iBaseAddr;
 
+	const char *GetSymbolName(u32 name, u32 shndx);
+
 	void ElfLoadHeader(const Elf32_Ehdr* pHeader);
 	bool ElfValidateHeader();
 	void ElfDumpHeader();
@@ -41,6 +43,7 @@ protected:
 	bool FillSection(ElfSection& elfSect, const Elf32_Shdr *pSection);
 	void ElfDumpSections();
 	bool LoadSections();
+	bool LoadSymbols();
 	void FreeMemory();
 public:
 	/** Default constructor */

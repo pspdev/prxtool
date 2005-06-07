@@ -132,7 +132,7 @@ int CNidMgr::CountNids(TiXmlElement *pElement, const char *name)
 	return iCount;
 }
 
-void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary)
+void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name)
 {
 	TiXmlHandle libHandle(pLibrary);
 	TiXmlText *elmName;
@@ -140,6 +140,8 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary)
 	TiXmlElement *elmVariable;
 	int fCount;
 	int vCount;
+	
+	assert(prx_name != NULL);
 
 	elmName = libHandle.FirstChild("NAME").FirstChild().Text();
 	if(elmName)
@@ -152,6 +154,7 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary)
 		{
 			memset(pLib, 0, sizeof(LibraryEntry));
 			strcpy(pLib->lib_name, elmName->Value());
+			strcpy(pLib->prx_name, prx_name);
 			elmFunction = libHandle.FirstChild("FUNCTIONS").FirstChild("FUNCTION").Element();
 			elmVariable = libHandle.FirstChild("VARIABLES").FirstChild("VARIABLE").Element();
 			fCount = CountNids(elmFunction, "FUNCTION");
@@ -215,12 +218,19 @@ void CNidMgr::ProcessPrxfile(TiXmlElement *pPrxfile)
 {
 	TiXmlHandle prxHandle(pPrxfile);
 	TiXmlElement *elmLibrary;
+	TiXmlText *txtName;
+
+	txtName = prxHandle.FirstChild("PRXNAME").FirstChild().Text();
 
 	elmLibrary = prxHandle.FirstChild("LIBRARIES").FirstChild("LIBRARY").Element();
 	while(elmLibrary)
 	{
 		COutput::Puts(LEVEL_DEBUG, "Found LIBRARY");
-		ProcessLibrary(elmLibrary);
+
+		if(txtName != NULL)
+		{
+			ProcessLibrary(elmLibrary, txtName->Value());
+		}
 
 		elmLibrary = elmLibrary->NextSiblingElement("LIBRARY");
 	}

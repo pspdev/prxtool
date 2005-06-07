@@ -226,8 +226,23 @@ ElfSection* CProcessElf::ElfFindSection(const char *szName)
 	return pSection;
 }
 
+const char *CProcessElf::GetSymbolName(u32 name, u32 shndx)
+{
+	if((shndx > 0) && (shndx < (u32) m_iSHCount))
+	{
+		if((m_pElfSections[shndx].iType == SHT_STRTAB) && (name < m_pElfSections[shndx].iSize))
+		{
+			return (char *) (m_pElfSections[shndx].pData + name);
+		}
+	}
+
+	return "";
+}
+
 bool CProcessElf::LoadPrograms()
 {
+	bool blRet = true;
+
 	if((m_elfHeader.iPhoff > 0) && (m_elfHeader.iPhnum > 0) && (m_elfHeader.iPhentsize > 0))
 	{
 		Elf32_Phdr *pHeader;
@@ -236,23 +251,87 @@ bool CProcessElf::LoadPrograms()
 
 		pData = m_pElf + m_elfHeader.iPhoff;
 
-		COutput::Puts(LEVEL_DEBUG, "Program Headers:");
-		for(iLoop = 0; iLoop < m_elfHeader.iPhnum; iLoop++)
+		SAFE_ALLOC(m_pElfPrograms, ElfProgram[m_elfHeader.iPhnum]);
+
+		if(m_pElfPrograms != NULL)
 		{
-			pHeader = (Elf32_Phdr *) pData;
-			COutput::Printf(LEVEL_DEBUG, "Type: %08X\n", LW(pHeader->p_type));
-			COutput::Printf(LEVEL_DEBUG, "Offset: %08X\n", LW(pHeader->p_offset));
-			COutput::Printf(LEVEL_DEBUG, "VAddr: %08X\n", LW(pHeader->p_vaddr));
-			COutput::Printf(LEVEL_DEBUG, "PAddr: %08X\n", LW(pHeader->p_paddr));
-			COutput::Printf(LEVEL_DEBUG, "FileSz: %d\n", LW(pHeader->p_filesz));
-			COutput::Printf(LEVEL_DEBUG, "MemSz: %d\n", LW(pHeader->p_memsz));
-			COutput::Printf(LEVEL_DEBUG, "Flags: %08X\n", LW(pHeader->p_flags));
-			COutput::Printf(LEVEL_DEBUG, "Align: %08X\n", LW(pHeader->p_align));
-			pData += m_elfHeader.iPhentsize;
+			m_iPHCount = m_elfHeader.iPhnum;
+			COutput::Puts(LEVEL_DEBUG, "Program Headers:");
+
+			for(iLoop = 0; iLoop < (u32) m_iPHCount; iLoop++)
+			{
+				pHeader = (Elf32_Phdr *) pData;
+				m_pElfPrograms[iLoop].iType = LW(pHeader->p_type);
+				m_pElfPrograms[iLoop].iOffset = LW(pHeader->p_type);
+				m_pElfPrograms[iLoop].iVaddr = LW(pHeader->p_vaddr);
+				m_pElfPrograms[iLoop].iPaddr = LW(pHeader->p_paddr);
+				m_pElfPrograms[iLoop].iFilesz = LW(pHeader->p_filesz);
+				m_pElfPrograms[iLoop].iMemsz = LW(pHeader->p_memsz);
+				m_pElfPrograms[iLoop].iFlags = LW(pHeader->p_flags);
+				m_pElfPrograms[iLoop].iAlign = LW(pHeader->p_align);
+				// Setup pData ? 
+
+				pData += m_elfHeader.iPhentsize;
+			}
+
+			if(COutput::GetDebug())
+			{
+				for(iLoop = 0; iLoop < (u32) m_iPHCount; iLoop++)
+				{
+					COutput::Printf(LEVEL_DEBUG, "Type: %08X\n", m_pElfPrograms[iLoop].iType);
+					COutput::Printf(LEVEL_DEBUG, "Offset: %08X\n", m_pElfPrograms[iLoop].iOffset);
+					COutput::Printf(LEVEL_DEBUG, "VAddr: %08X\n", m_pElfPrograms[iLoop].iVaddr);
+					COutput::Printf(LEVEL_DEBUG, "PAddr: %08X\n", m_pElfPrograms[iLoop].iPaddr);
+					COutput::Printf(LEVEL_DEBUG, "FileSz: %d\n", m_pElfPrograms[iLoop].iFilesz);
+					COutput::Printf(LEVEL_DEBUG, "MemSz: %d\n", m_pElfPrograms[iLoop].iMemsz);
+					COutput::Printf(LEVEL_DEBUG, "Flags: %08X\n", m_pElfPrograms[iLoop].iFlags);
+					COutput::Printf(LEVEL_DEBUG, "Align: %08X\n", m_pElfPrograms[iLoop].iAlign);
+				}
+			}
+		}
+		else
+		{
+			blRet = false;
 		}
 	}
 
-	return true;
+	return blRet;
+}
+
+bool CProcessElf::LoadSymbols()
+{
+	ElfSection *pSymtab;
+	bool blRet = true;
+
+	COutput::Printf(LEVEL_DEBUG, "Size %d\n", sizeof(Elf32_Sym));
+
+	pSymtab = ElfFindSection(".symtab");
+	if((pSymtab != NULL) && (pSymtab->iType == SHT_SYMTAB) && (pSymtab->pData != NULL))
+	{
+		Elf32_Sym *pSym;
+		int iLoop, iSymcount;
+		u32 symidx;
+		u32 name;
+
+		symidx = pSymtab->iLink;
+		iSymcount = pSymtab->iSize / sizeof(Elf32_Sym);
+		pSym = (Elf32_Sym*) pSymtab->pData;
+		for(iLoop = 0; iLoop < iSymcount; iLoop++)
+		{
+			name = LW(pSym->st_name);
+
+			COutput::Printf(LEVEL_DEBUG, "Symbol %d\n", iLoop);
+			COutput::Printf(LEVEL_DEBUG, "Name %d, '%s'\n", name, GetSymbolName(name, symidx));
+			COutput::Printf(LEVEL_DEBUG, "Value %08X\n", LW(pSym->st_value));
+			COutput::Printf(LEVEL_DEBUG, "Size  %08X\n", LW(pSym->st_size));
+			COutput::Printf(LEVEL_DEBUG, "Info  %02X\n", pSym->st_info);
+			COutput::Printf(LEVEL_DEBUG, "Other %02X\n", pSym->st_other);
+			COutput::Printf(LEVEL_DEBUG, "Shndx %04X\n\n", LH(pSym->st_shndx));
+			pSym++;
+		}
+	}
+
+	return blRet;
 }
 
 bool CProcessElf::FillSection(ElfSection& elfSect, const Elf32_Shdr *pSection)
@@ -401,13 +480,15 @@ bool CProcessElf::LoadSections()
 					break;
 				}
 
-				/* Check if this section was a string table */
-				if((m_pElfStrtab == NULL) && (m_pElfSections[iLoop].iType == SHT_STRTAB))
-				{
-					m_pElfStrtab = &m_pElfSections[iLoop];
-				}
-
 				pData += m_elfHeader.iShentsize;
+			}
+
+			if((m_elfHeader.iShstrndx > 0) && (m_elfHeader.iShstrndx < (u32) m_iSHCount))
+			{
+				if(m_pElfSections[m_elfHeader.iShstrndx].iType == SHT_STRTAB)
+				{
+					m_pElfStrtab = &m_pElfSections[m_elfHeader.iShstrndx];
+				}
 			}
 
 			if(blRet)
@@ -483,7 +564,7 @@ bool CProcessElf::LoadFromFile(const char *szFilename)
 	m_pElf = LoadFileToMem(szFilename, m_iElfSize);
 	if((m_pElf != NULL) && (ElfValidateHeader() == true))
 	{
-		if((LoadPrograms() == true) && (LoadSections() == true) && (BuildBinaryImage() == true))
+		if((LoadPrograms() == true) && (LoadSections() == true) && (LoadSymbols() == true) && (BuildBinaryImage() == true))
 		{
 			strncpy(m_szFilename, szFilename, MAXPATH-1);
 			m_szFilename[MAXPATH-1] = 0;

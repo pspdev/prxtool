@@ -16,6 +16,7 @@ struct LibraryNid
 struct LibraryEntry
 {
 	struct LibraryEntry* pNext;
+	char prx_name[LIB_NAME_MAX];
 	char lib_name[LIB_NAME_MAX];
 	int  entry_count;
 	LibraryNid *pNids;
@@ -30,7 +31,7 @@ class CNidMgr
 	void FreeMemory();
 	const char* ReadNid(TiXmlElement *pElement, u32 &nid);
 	int CountNids(TiXmlElement *pElement, const char *name);
-	void ProcessLibrary(TiXmlElement *pLibrary);
+	void ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name);
 	void ProcessPrxfile(TiXmlElement *pPrxfile);
 public:
 	CNidMgr();
