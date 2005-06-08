@@ -2,6 +2,7 @@
 #define __TYPES_H__
 
 #ifdef HAVE_CONFIG_H
+#include "config.h"
 #include "_stdint.h"
 #else
 #include <sys/types.h>

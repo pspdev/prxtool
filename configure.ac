@@ -26,6 +26,7 @@ AC_C_CONST
 AC_C_INLINE
 AC_TYPE_SIZE_T
 AC_CHECK_TYPES([ptrdiff_t])
+AC_C_BIGENDIAN
 
 # Checks for library functions.
 AC_CHECK_FUNCS([memset strchr strtoul])
