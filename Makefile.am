@@ -41,4 +41,6 @@ noinst_SCRIPTS = bootstrap
 
 EXTRA_DIST = \
 	$(ACLOCAL_FILES) \
-	$(TINYXML)/VERSION
+	$(TINYXML)/VERSION \
+	$(TINYXML)/changes.txt \
+	$(TINYXML)/readme.txt
