@@ -2,7 +2,7 @@
 #define __NIDMGR_H__
 
 #include "types.h"
-#include <tinyxml.h>
+#include <tinyxml/tinyxml.h>
 
 #define LIB_NAME_MAX 64
 #define LIB_SYMBOL_NAME_MAX 128

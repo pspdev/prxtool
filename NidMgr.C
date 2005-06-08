@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include <tinyxml.h>
+#include <tinyxml/tinyxml.h>
 #include "output.h"
 #include "NidMgr.h"
 
