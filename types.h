@@ -1,15 +1,25 @@
 #ifndef __TYPES_H__
 #define __TYPES_H__
 
+#ifdef HAVE_CONFIG_H
+#include "_stdint.h"
+#else
 #include <sys/types.h>
+#define uint8_t u_int8_t
+#define uint16_t u_int16_t
+#define uint32_t u_int32_t
+#define uint64_t u_int64_t
+#endif
 
 /* Re-define some system types */
-typedef u_int8_t 	u8;
-typedef u_int16_t 	u16;
-typedef u_int32_t	u32;
+typedef uint8_t 	u8;
+typedef uint16_t 	u16;
+typedef uint32_t	u32;
+typedef uint64_t	u64;
 typedef int8_t		s8;
 typedef int16_t		s16;
 typedef int32_t		s32;
+typedef int64_t		s64;
 
 inline u32 lw_le(const u8 *ptr)
 {

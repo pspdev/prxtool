@@ -1,5 +1,5 @@
 ACLOCAL_AMFLAGS = -I aclocal
-ACLOCAL_FILES = aclocal/version.m4
+ACLOCAL_FILES = aclocal/version.m4 aclocal/ax_create_stdint_h.m4
 AM_CFLAGS = -Wall
 
 bin_PROGRAMS = prxtool

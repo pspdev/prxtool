@@ -12,13 +12,13 @@ AM_INIT_AUTOMAKE([prxtool], [PRXTOOL_VERSION])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
-AC_PROG_CPP
 
 # Checks for libraries.
 
 # Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS([stddef.h stdlib.h string.h unistd.h])
+AX_CREATE_STDINT_H
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
