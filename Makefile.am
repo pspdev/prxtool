@@ -4,7 +4,8 @@ AM_CFLAGS = -Wall
 
 bin_PROGRAMS = prxtool
 
-INLCUDES = -I $(srcdir) -I $(top_srcdir)/tinyxml
+TINYXML = $(srcdir)/tinyxml
+INLCUDES = -I $(srcdir) -I $(TINYXML)
 
 prxtool_SOURCES = \
 	main.C \
@@ -16,7 +17,28 @@ prxtool_SOURCES = \
 	SerializePrx.C \
 	SerializePrxToIdc.C \
 	SerializePrxToXml.C \
-	tinyxml/tinyxml.cpp \
-	tinyxml/tinyxmlparser.cpp \
-	tinyxml/tinystr.cpp \
-	tinyxml/tinyxmlerror.cpp
+	$(TINYXML)/tinyxml.cpp \
+	$(TINYXML)/tinyxmlparser.cpp \
+	$(TINYXML)/tinystr.cpp \
+	$(TINYXML)/tinyxmlerror.cpp
+
+noinst_HEADERS = \
+	types.h \
+	elftypes.h \
+	prxtypes.h \
+	output.h \
+	NidMgr.h \
+	ProcessElf.h \
+	ProcessPrx.h \
+	SerializePrx.h \
+	SerializePrxToIdc.h \
+	SerializePrxToXml.h \
+	VirtualMem.h \
+	$(TINYXML)/tinystr.h \
+	$(TINYXML)/tinyxml.h
+
+noinst_SCRIPTS = bootstrap
+
+EXTRA_DIST = \
+	$(ACLOCAL_FILES) \
+	$(TINYXML)/VERSION
