@@ -58,11 +58,11 @@ u16   CVirtualMem::GetU16(u32 iAddr)
 	{
 		if(m_endian == MEM_LITTLE_ENDIAN)
 		{
-			return LH_LE(m_pData[iAddr - m_iBaseAddr]);
+			return LH_LE(*((u16*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else if(m_endian == MEM_BIG_ENDIAN)
 		{
-			return LH_BE(m_pData[iAddr - m_iBaseAddr]);
+			return LH_BE(*((u16*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else
 		{
@@ -83,11 +83,11 @@ u32   CVirtualMem::GetU32(u32 iAddr)
 	{
 		if(m_endian == MEM_LITTLE_ENDIAN)
 		{
-			return LW_LE(m_pData[iAddr - m_iBaseAddr]);
+			return LW_LE(*((u32*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else if(m_endian == MEM_BIG_ENDIAN)
 		{
-			return LW_BE(m_pData[iAddr - m_iBaseAddr]);
+			return LW_BE(*((u32*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else
 		{
@@ -120,11 +120,11 @@ s16   CVirtualMem::GetS16(u32 iAddr)
 	{
 		if(m_endian == MEM_LITTLE_ENDIAN)
 		{
-			return LH_LE(m_pData[iAddr - m_iBaseAddr]);
+			return LH_LE(*((u16*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else if(m_endian == MEM_BIG_ENDIAN)
 		{
-			return LH_BE(m_pData[iAddr - m_iBaseAddr]);
+			return LH_BE(*((u16*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else
 		{
@@ -146,11 +146,11 @@ s32   CVirtualMem::GetS32(u32 iAddr)
 	{
 		if(m_endian == MEM_LITTLE_ENDIAN)
 		{
-			return LW_LE(m_pData[iAddr - m_iBaseAddr]);
+			return LW_LE(*((u32*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else if(m_endian == MEM_BIG_ENDIAN)
 		{
-			return LW_BE(m_pData[iAddr - m_iBaseAddr]);
+			return LW_BE(*((u32*) &m_pData[iAddr - m_iBaseAddr]));
 		}
 		else
 		{

@@ -22,85 +22,124 @@ typedef int16_t		s16;
 typedef int32_t		s32;
 typedef int64_t		s64;
 
-inline u32 lw_le(const u8 *ptr)
+#ifdef WORDS_BIGENDIAN
+inline u32 lw_le(u32 &data)
 {
+	u8 *ptr;
 	u32 val;
+
+	ptr = (u8*) &data;
 
 	val = ptr[0] | (ptr[1] << 8) | (ptr[2] << 16) | (ptr[3] << 24);
 
 	return val;
 }
 
-inline u16 lh_le(const u8 *ptr)
+inline u16 lh_le(u16 &data)
 {
+	u8 *ptr;
 	u16 val;
+
+	ptr = (u8*) &data;
 
 	val = ptr[0] | (ptr[1] << 8);
 
 	return val;
 }
 
-inline u32 lw_be(const u8 *ptr)
+#define LW_LE(x) (lw_le((x)))
+#define LW_BE(x) (x)
+#define LH_LE(x) (lh_le((x)))
+#define LH_BE(x) (x)
+
+#else
+
+inline u32 lw_be(u32 &data)
 {
+	u8 *ptr;
 	u32 val;
+
+	ptr = (u8*) &data;
 
 	val = (ptr[0] << 24) | (ptr[1] << 16) | (ptr[2] << 8) | ptr[3];
 
 	return val;
 }
 
-inline u16 lh_be(const u8 *ptr)
+inline u16 lh_be(u16 &data)
 {
+	u8 *ptr;
 	u16 val;
+
+	ptr = (u8*) &data;
 
 	val = (ptr[0] << 16) | ptr[1];
 
 	return val;
 }
 
-/* Should be different for different architectures */
-/* Should read X as a little endian word and return the native word */
-#define LW_LE(x) (lw_le((u8*) &(x)))
-#define LW_BE(x) (lw_be((u8*) &(x)))
-#define LH_LE(x) (lh_le((u8*) &(x)))
-#define LH_BE(x) (lh_be((u8*) &(x)))
+#define LW_LE(x) (x)
+#define LW_BE(x) (lw_be((x)))
+#define LH_LE(x) (x)
+#define LH_BE(x) (lh_be((x)))
+
+#endif
+
 #define LW(x) (LW_LE(x))
 #define LH(x) (LH_LE(x))
 
-inline void sw_le(u8 *ptr, u32 val)
+
+#ifdef WORDS_BIGENDIAN
+inline void sw_le(u32 &data, u32 val)
 {
+	u8* ptr = (u8*) &data;
+
 	ptr[0] = (u8) (val & 0xFF);
 	ptr[1] = (u8) ((val >> 8) & 0xFF);
 	ptr[2] = (u8) ((val >> 16) & 0xFF);
 	ptr[3] = (u8) ((val >> 24) & 0xFF);
 }
 
-inline void sh_le(u8 *ptr, u16 val)
+inline void sh_le(u16 &data, u16 val)
 {
+	u8 *ptr (u8*) &data;
+
 	ptr[0] = (u8) (val & 0xFF);
 	ptr[1] = (u8) ((val >> 8) & 0xFF);
 }
 
-inline void sw_be(u8 *ptr, u32 val)
+#define SW_LE(x, v) (sw_le((u8*) &(x), (v)))
+#define SW_BE(x, v) ((x) = (v))
+#define SH_LE(x, v) (sh_le((u8*) &(x), (v)))
+#define SH_BE(x, v) ((x) = (v))
+
+#else
+
+inline void sw_be(u32 &data, u32 val)
 {
+	u8 *ptr = (u8*) &data;
+
 	ptr[0] = (u8) ((val >> 24) & 0xFF);
 	ptr[1] = (u8) ((val >> 16) & 0xFF);
 	ptr[2] = (u8) ((val >> 8) & 0xFF);
 	ptr[3] = (u8) (val & 0xFF);
 }
 
-inline void sh_be(u8 *ptr, u16 val)
+inline void sh_be(u16 &data, u16 val)
 {
+	u8* ptr = (u8*) &data;
+
 	ptr[0] = (u8) ((val >> 8) & 0xFF);
 	ptr[1] = (u8) (val & 0xFF);
 }
 
-/* Should be different for different architectures */
-/* Should read X as a little endian word and return the native word */
-#define SW_LE(x, v) (sw_le((u8*) &(x), (v)))
+#define SW_LE(x, v) ((x) = (v))
 #define SW_BE(x, v) (sw_be((u8*) &(x), (v)))
-#define SH_LE(x, v) (sh_le((u8*) &(x), (v)))
+#define SH_LE(x, v) ((x) = (v))
 #define SH_BE(x, v) (sh_be((u8*) &(x), (v)))
+
+#endif
+
 #define SW(x, v) (SW_LE(x, v))
 #define SH(x, v) (SH_LE(x, v))
 
