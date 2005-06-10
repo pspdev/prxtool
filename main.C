@@ -12,6 +12,7 @@ enum OutputMode
 	OUTPUT_IDC = 0,
 	OUTPUT_XML = 1,
 	OUTPUT_ELF = 2,
+	OUTPUT_PRX = 3,
 };
 
 static char **g_ppInfiles;
@@ -55,7 +56,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xcpdo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "xcpedo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -63,7 +64,9 @@ int process_args(int argc, char **argv)
 					  break;
 			case 'x' : g_outputMode = OUTPUT_XML;
 					   break;
-			case 'p' : g_outputMode = OUTPUT_ELF;
+			case 'p' : g_outputMode = OUTPUT_PRX;
+					   break;
+			case 'e' : g_outputMode = OUTPUT_ELF;
 					   break;
 			case 'c' : g_outputMode = OUTPUT_IDC;
 					   break;
@@ -119,13 +122,13 @@ int process_args(int argc, char **argv)
 
 void print_help()
 {
-	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] prxfile\n");
+	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] file.elf\n");
 	COutput::Printf(LEVEL_INFO, "Options:\n");
 	COutput::Printf(LEVEL_INFO, "-o outfile : Output file. If not specified uses stdout\n");
 	COutput::Printf(LEVEL_INFO, "-c         : Output an IDC file (default)\n");
 	COutput::Printf(LEVEL_INFO, "-x         : Output an XML file\n");
-	COutput::Printf(LEVEL_INFO, "-p         : Output a patched ELF file\n");
-	COutput::Printf(LEVEL_INFO, "-t         : Output a text file containing a list of nids\n");
+	COutput::Printf(LEVEL_INFO, "-p         : Output a PRX (from an ELF)\n");
+	COutput::Printf(LEVEL_INFO, "-e         : Output an ELF (from a PRX)\n");
 	COutput::Printf(LEVEL_INFO, "-d         : Enable debug mode\n");
 	COutput::Printf(LEVEL_INFO, "-s ixrs    : Specify what to serialize (Imports,Exports,Relocs,Sections)\n");
 	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
@@ -148,6 +151,24 @@ void output_elf(const char *file, FILE *out_fp)
 		if(prx.FixupPrx(out_fp) == false)
 		{
 			COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up ELF\n");
+		}
+	}
+}
+
+void output_prx(const char *file, FILE *out_fp)
+{
+	CProcessPrx prx;
+
+	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures\n");
+	}
+	else
+	{
+		if(prx.ElfToPrx(out_fp) == false)
+		{
+			COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up PRX\n");
 		}
 	}
 }
@@ -210,6 +231,10 @@ int main(int argc, char **argv)
 		if(g_outputMode == OUTPUT_ELF)
 		{
 			output_elf(g_ppInfiles[0], out_fp);
+		}
+		else if(g_outputMode == OUTPUT_PRX)
+		{
+			output_prx(g_ppInfiles[0], out_fp);
 		}
 		else
 		{

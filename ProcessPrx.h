@@ -31,7 +31,10 @@ public:
 	virtual ~CProcessPrx();
 	virtual bool LoadFromFile(const char *szFilename);
 	void FixupNames();
+
 	bool FixupPrx(FILE *fp);
+	bool ElfToPrx(FILE *fp);
+
 	PspModule* GetModuleInfo();
 	ElfReloc* GetRelocs(int &iCount);
 	void SetNidMgr(CNidMgr* nidMgr);

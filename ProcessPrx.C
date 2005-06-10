@@ -657,6 +657,48 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 	return true;
 }
 
+bool CProcessPrx::ElfToPrx(FILE *fp)
+{
+	u8 *pElfCopy;
+	Elf32_Phdr* pProgram;
+	ElfSection* pModInfoSect;
+
+	/* Fixup the elf file and output it to fp */
+	if((fp == NULL) || (m_blPrxLoaded == false))
+	{
+		return false;
+	}
+
+	if((m_elfHeader.iPhnum == 0) || (m_elfHeader.iPhentsize == 0) || (m_elfHeader.iPhoff == 0))
+	{
+		COutput::Puts(LEVEL_ERROR, "Invalid program header data\n");
+		return false;
+	}
+
+	pModInfoSect = ElfFindSection(".rodata.sceModuleInfo");
+	if(pModInfoSect == NULL)
+	{
+		COutput::Puts(LEVEL_ERROR, "Could not find the module info section\n");
+		return false;
+	}
+
+	pElfCopy = new u8[m_iElfSize];
+	if(pElfCopy == NULL)
+	{
+		return false;
+	}
+	memcpy(pElfCopy, m_pElf, m_iElfSize);
+	pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
+	SW(pProgram->p_paddr, pModInfoSect->iOffset);
+
+	fwrite(pElfCopy, 1, m_iElfSize, fp);
+	fflush(fp);
+
+	delete pElfCopy;
+
+	return true;
+}
+
 ElfReloc* CProcessPrx::GetRelocs(int &iCount)
 {
 	iCount = m_iRelocCount;
