@@ -620,26 +620,61 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 	if(m_pElfRelocs != NULL)
 	{
 		int iLoop;
-		u32 addr;
-		u16 *pData;
+		u32 *pData;
+		u32 *pData_HiAddr;
 		/* Any relocs with symbol == 256 fixup to base of .data */
 
+		pData = NULL;
+		pData_HiAddr = NULL;
+		iLoop = 0;
 		for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
 		{
 			if((m_pElfRelocs[iLoop].symbol == 256) && (m_pElfRelocs[iLoop].offset < pTextSect->iSize))
 			{
-
 				switch(m_pElfRelocs[iLoop].type)
 				{
-					case R_MIPS_HI16 : pData = (u16*) (pElfCopy + pTextSect->iOffset + m_pElfRelocs[iLoop].offset);
-									   addr = LH(*pData) << 16;
-									   addr = ((addr + pDataSect->iAddr) >> 16) & 0xFFFF;
-									   SH(*pData, addr);
+					case R_MIPS_HI16 : pData_HiAddr = (u32*) (pElfCopy + pTextSect->iOffset 
+											   + m_pElfRelocs[iLoop].offset);
 									break;
-					case R_MIPS_LO16 : pData = (u16*) (pElfCopy + pTextSect->iOffset + m_pElfRelocs[iLoop].offset);
-									   addr = LH(*pData);
-									   addr = (addr + pDataSect->iAddr) & 0xFFFF;
-									   SH(*pData, addr);
+					case R_MIPS_LO16 : 	if(pData_HiAddr != NULL)
+										{
+											u32 hiinst;
+											u32 loinst;
+											u32 addr;
+
+											pData = (u32*) (pElfCopy + pTextSect->iOffset 
+													+ m_pElfRelocs[iLoop].offset);
+											hiinst = LW(*pData_HiAddr);
+											loinst = LW(*pData);
+											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", iLoop, hiinst, loinst);
+
+											addr = (hiinst & 0xFFFF) << 16;
+											/* Addiu */
+											if((loinst >> 26) == 9)
+											{
+												COutput::Printf(LEVEL_DEBUG, "Addiu\n");
+												addr = (s32) addr + (s16) (loinst & 0xFFFF);
+												COutput::Printf(LEVEL_DEBUG, "%d: Address %08X\n", iLoop, addr);
+												/* Oki lets replace it with a ori so our life is easier :P */
+												loinst |= (1 << 28);
+											}
+											else
+											{
+												addr = addr + (loinst & 0xFFFF);
+											}
+
+											addr += pDataSect->iAddr;
+											loinst &= ~0xFFFF;
+											loinst |= (addr & 0xFFFF);
+											hiinst &= ~0xFFFF;
+											hiinst |= ((addr >> 16) & 0xFFFF);
+											SW(*pData_HiAddr, hiinst);
+											SW(*pData, loinst);
+										}
+										else
+										{
+											COutput::Printf(LEVEL_DEBUG, "No matching HIADDR for reloc %d\n", iLoop);
+										}
 
 									break;
 					default:		COutput::Printf(LEVEL_DEBUG, "Unsupported relocation type:%d\n", m_pElfRelocs[iLoop].type);
