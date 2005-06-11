@@ -264,7 +264,7 @@ bool CProcessElf::LoadPrograms()
 			{
 				pHeader = (Elf32_Phdr *) pData;
 				m_pElfPrograms[iLoop].iType = LW(pHeader->p_type);
-				m_pElfPrograms[iLoop].iOffset = LW(pHeader->p_type);
+				m_pElfPrograms[iLoop].iOffset = LW(pHeader->p_offset);
 				m_pElfPrograms[iLoop].iVaddr = LW(pHeader->p_vaddr);
 				m_pElfPrograms[iLoop].iPaddr = LW(pHeader->p_paddr);
 				m_pElfPrograms[iLoop].iFilesz = LW(pHeader->p_filesz);
