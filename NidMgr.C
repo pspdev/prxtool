@@ -51,7 +51,7 @@ const char *CNidMgr::GenName(const char *lib, u32 nid)
 	return m_szCurrName;
 }
 
-const char *CNidMgr::SearchLibs(const char *lib, unsigned int nid)
+const char *CNidMgr::SearchLibs(const char *lib, u32 nid)
 {
 	const char *pName = NULL;
 	LibraryEntry *pLib;
@@ -265,7 +265,7 @@ bool CNidMgr::AddXmlFile(const char *szFilename)
 }
 
 /* Find the name based on our list of names, not currently implemented */
-const char *CNidMgr::FindLibName(const char *lib, unsigned int nid)
+const char *CNidMgr::FindLibName(const char *lib, u32 nid)
 {
 	return SearchLibs(lib, nid);
 }
