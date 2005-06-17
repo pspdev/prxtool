@@ -205,7 +205,18 @@ int main(int argc, char **argv)
 		COutput::SetDebug(g_blDebug);
 		if(g_pOutfile != NULL)
 		{
-			out_fp = fopen(g_pOutfile, "w");
+			switch(g_outputMode)
+			{
+				case OUTPUT_XML :
+				case OUTPUT_IDC :
+					out_fp = fopen(g_pOutfile, "wt");
+					break;
+				case OUTPUT_ELF :
+				case OUTPUT_PRX :
+				default:
+					out_fp = fopen(g_pOutfile, "wb");
+					break;
+			}
 			if(out_fp == NULL)
 			{
 				COutput::Printf(LEVEL_ERROR, "Couldn't open output file %s\n", g_pOutfile);
