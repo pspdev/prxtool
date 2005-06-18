@@ -9,10 +9,12 @@
 
 enum OutputMode
 {
-	OUTPUT_IDC = 0,
-	OUTPUT_XML = 1,
-	OUTPUT_ELF = 2,
-	OUTPUT_PRX = 3,
+	OUTPUT_NONE = 0,
+	OUTPUT_IDC = 1,
+	OUTPUT_XML = 2,
+	OUTPUT_ELF = 3,
+	OUTPUT_PRX = 4,
+	OUTPUT_STUB = 5,
 };
 
 static char **g_ppInfiles;
@@ -56,7 +58,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xcpedo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "xcptedo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -69,6 +71,8 @@ int process_args(int argc, char **argv)
 			case 'e' : g_outputMode = OUTPUT_ELF;
 					   break;
 			case 'c' : g_outputMode = OUTPUT_IDC;
+					   break;
+			case 't' : g_outputMode = OUTPUT_STUB;
 					   break;
 			case 'o' : g_pOutfile = optarg;
 					   break;
@@ -90,6 +94,8 @@ int process_args(int argc, char **argv)
 								   case 'r' : g_iSMask |= SERIALIZE_RELOCS;
 											  break;
 								   case 's' : g_iSMask |= SERIALIZE_SECTIONS;
+											  break;
+								   case 'l' : g_iSMask |= SERIALIZE_DOSYSLIB;
 											  break;
 								   default:   COutput::Printf(LEVEL_WARNING, 
 													  "Unknown serialize option '%c'\n", 
@@ -122,19 +128,22 @@ int process_args(int argc, char **argv)
 
 void print_help()
 {
-	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] file.elf\n");
+	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] file\n");
 	COutput::Printf(LEVEL_INFO, "Options:\n");
 	COutput::Printf(LEVEL_INFO, "-o outfile : Output file. If not specified uses stdout\n");
 	COutput::Printf(LEVEL_INFO, "-c         : Output an IDC file (default)\n");
 	COutput::Printf(LEVEL_INFO, "-x         : Output an XML file\n");
-	COutput::Printf(LEVEL_INFO, "-p         : Output a PRX (from an ELF)\n");
+	COutput::Printf(LEVEL_INFO, "-p         : Output a PRX/PFX (from an ELF)\n");
 	COutput::Printf(LEVEL_INFO, "-e         : Output an ELF (from a PRX)\n");
 	COutput::Printf(LEVEL_INFO, "-d         : Enable debug mode\n");
-	COutput::Printf(LEVEL_INFO, "-s ixrs    : Specify what to serialize (Imports,Exports,Relocs,Sections)\n");
+	COutput::Printf(LEVEL_INFO, "-s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
 	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
+	COutput::Printf(LEVEL_INFO, "-t         : Emit stub files for the XML file passed on the command line\n");
 	COutput::Printf(LEVEL_INFO, "\n");
-	COutput::Printf(LEVEL_INFO, "Example: prxtool -o output.idc -s xr myfile.prx\n");
+	COutput::Printf(LEVEL_INFO, "Example 1: prxtool -o output.idc -s xr myfile.prx\n");
 	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
+	COutput::Printf(LEVEL_INFO, "Example 2: prxtool -c psplibdoc.xml\n");
+	COutput::Printf(LEVEL_INFO, "Outputs one or more stub .S files to the current directory from the XML file\n");
 }
 
 void output_elf(const char *file, FILE *out_fp)
@@ -246,6 +255,18 @@ int main(int argc, char **argv)
 		else if(g_outputMode == OUTPUT_PRX)
 		{
 			output_prx(g_ppInfiles[0], out_fp);
+		}
+		else if(g_outputMode == OUTPUT_STUB)
+		{
+			CNidMgr nidData;
+
+			if(nidData.AddXmlFile(g_ppInfiles[0]))
+			{
+				if(nidData.EmitStubs("") == false)
+				{
+					COutput::Puts(LEVEL_ERROR, "Failed to emit stubs");
+				}
+			}
 		}
 		else
 		{

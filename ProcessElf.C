@@ -124,7 +124,7 @@ void CProcessElf::ElfDumpHeader()
 	COutput::Printf(LEVEL_DEBUG, "PHNum %d\n", m_elfHeader.iPhnum);
 	COutput::Printf(LEVEL_DEBUG, "SHEntSize %d\n", m_elfHeader.iShentsize);
 	COutput::Printf(LEVEL_DEBUG, "SHNum %d\n", m_elfHeader.iShnum);
-	COutput::Printf(LEVEL_DEBUG, "SHStrndx %d\n", m_elfHeader.iShstrndx);
+	COutput::Printf(LEVEL_DEBUG, "SHStrndx %d\n\n", m_elfHeader.iShstrndx);
 }
 
 void CProcessElf::ElfLoadHeader(const Elf32_Ehdr* pHeader)
@@ -280,6 +280,7 @@ bool CProcessElf::LoadPrograms()
 			{
 				for(iLoop = 0; iLoop < (u32) m_iPHCount; iLoop++)
 				{
+					COutput::Printf(LEVEL_DEBUG, "Program Header %d:\n", iLoop);
 					COutput::Printf(LEVEL_DEBUG, "Type: %08X\n", m_pElfPrograms[iLoop].iType);
 					COutput::Printf(LEVEL_DEBUG, "Offset: %08X\n", m_pElfPrograms[iLoop].iOffset);
 					COutput::Printf(LEVEL_DEBUG, "VAddr: %08X\n", m_pElfPrograms[iLoop].iVaddr);
@@ -287,7 +288,7 @@ bool CProcessElf::LoadPrograms()
 					COutput::Printf(LEVEL_DEBUG, "FileSz: %d\n", m_pElfPrograms[iLoop].iFilesz);
 					COutput::Printf(LEVEL_DEBUG, "MemSz: %d\n", m_pElfPrograms[iLoop].iMemsz);
 					COutput::Printf(LEVEL_DEBUG, "Flags: %08X\n", m_pElfPrograms[iLoop].iFlags);
-					COutput::Printf(LEVEL_DEBUG, "Align: %08X\n", m_pElfPrograms[iLoop].iAlign);
+					COutput::Printf(LEVEL_DEBUG, "Align: %08X\n\n", m_pElfPrograms[iLoop].iAlign);
 				}
 			}
 		}
@@ -351,6 +352,8 @@ bool CProcessElf::FillSection(ElfSection& elfSect, const Elf32_Shdr *pSection)
 	elfSect.iAddralign = LW(pSection->sh_addralign);
 	elfSect.iEntsize = LW(pSection->sh_entsize);
 	elfSect.pData = m_pElf + elfSect.iOffset;
+	elfSect.pRelocs = NULL;
+	elfSect.iRelocCount = 0;
 
 	if(((elfSect.pData + elfSect.iSize) > (m_pElf + m_iElfSize)) && (elfSect.iType != SHT_NOBITS))
 	{

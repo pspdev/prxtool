@@ -72,7 +72,7 @@ void CSerializePrx::DoImports(CProcessPrx &prx)
 	}
 }
 
-void CSerializePrx::DoExports(CProcessPrx &prx)
+void CSerializePrx::DoExports(CProcessPrx &prx, bool blDoSyslib)
 {
 	PspModule *pMod;
 	PspLibExport *pExport;
@@ -89,12 +89,15 @@ void CSerializePrx::DoExports(CProcessPrx &prx)
 	pExport = pMod->exp_head;
 	while(pExport != NULL)
 	{
-		if(SerializeExport(iLoop, pExport) == false)
+		if((blDoSyslib) || (strcmp(pExport->name, PSP_SYSTEM_EXPORT) != 0))
 		{
-			throw false;
+			if(SerializeExport(iLoop, pExport) == false)
+			{
+				throw false;
+			}
+			iLoop++;
 		}
 
-		iLoop++;
 		pExport = pExport->next;
 	}
 
@@ -213,8 +216,6 @@ bool CSerializePrx::SerializePrx(CProcessPrx &prx, u32 iSMask)
 			throw false;
 		}
 
-		//DoModule(prx);
-
 		if(iSMask & SERIALIZE_SECTIONS)
 		{
 			DoSects(prx);
@@ -227,7 +228,7 @@ bool CSerializePrx::SerializePrx(CProcessPrx &prx, u32 iSMask)
 
 		if(iSMask & SERIALIZE_EXPORTS)
 		{
-			DoExports(prx);
+			DoExports(prx, iSMask & SERIALIZE_DOSYSLIB ? true : false);
 		}
 
 		if(iSMask & SERIALIZE_RELOCS)

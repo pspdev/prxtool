@@ -11,6 +11,9 @@
 
 #define PSP_MODULE_INFO_NAME ".rodata.sceModuleInfo"
 
+/* Define a name for the unnamed first export */
+#define PSP_SYSTEM_EXPORT "syslib"
+
 enum PspEntryType
 {
 	PSP_ENTRY_FUNC = 0,

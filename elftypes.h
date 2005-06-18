@@ -33,6 +33,10 @@ struct ElfSection
 	u8 *pData;
 	/* Name of the section */
 	char szName[ELF_SECT_MAX_NAME];
+	/* Pointer to the head of the relocs (if any) */
+	struct ElfReloc *pRelocs;
+	/* Number of relocs for this section */
+	u32 iRelocCount;
 };
 
 struct ElfProgram

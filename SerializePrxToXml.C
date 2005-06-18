@@ -14,6 +14,7 @@ CSerializePrxToXml::~CSerializePrxToXml()
 bool CSerializePrxToXml::StartFile()
 {
 	fprintf(m_fpOut, "<?xml version=\"1.0\" ?>\n");
+	fprintf(m_fpOut, "<?xml-stylesheet type=\"text/xsl\" href=\"psplibdocdisplay.xsl\" ?>\n");
 	fprintf(m_fpOut, "<PSPLIBDOC>\n");
 	fprintf(m_fpOut, "\t<PRXFILES>\n");
 
@@ -125,6 +126,7 @@ bool CSerializePrxToXml::SerializeExport(int num, const PspLibExport *exp)
 
 	fprintf(m_fpOut, "\t\t\t<LIBRARY>\n");
 	fprintf(m_fpOut, "\t\t\t\t<NAME>%s</NAME>\n", exp->name);
+	fprintf(m_fpOut, "\t\t\t\t<FLAGS>0x%08X</FLAGS>\n", exp->stub.flags);
 
 	if(exp->f_count > 0)
 	{

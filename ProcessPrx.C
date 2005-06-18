@@ -115,6 +115,8 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 			}
 
 			COutput::Printf(LEVEL_DEBUG, "Found import library '%s'\n", pLib->name);
+			COutput::Printf(LEVEL_DEBUG, "Flags %08X, counts %08X, nids %08X, funcs %08X\n", 
+					pLib->stub.flags, pLib->stub.counts, pLib->stub.nids, pLib->stub.funcs);
 
 			/* No idea how to resolve variable at this moment, it might just throw in a ptr */
 			pLib->v_count = (pLib->stub.counts >> 8) & 0xFF;
@@ -267,7 +269,7 @@ int CProcessPrx::LoadSingleExport(PspModuleExport *pExport, u32 addr)
 			if(pLib->stub.name == 0)
 			{
 				/* If 0 then this is the system, this should be the only one */
-				strcpy(pLib->name, "syslib");
+				strcpy(pLib->name, PSP_SYSTEM_EXPORT);
 			}
 			else
 			{
@@ -282,6 +284,8 @@ int CProcessPrx::LoadSingleExport(PspModuleExport *pExport, u32 addr)
 			}
 
 			COutput::Printf(LEVEL_DEBUG, "Found export library '%s'\n", pLib->name);
+			COutput::Printf(LEVEL_DEBUG, "Flags %08X, counts %08X, exports %08X\n", 
+					pLib->stub.flags, pLib->stub.counts, pLib->stub.exports);
 
 			pLib->v_count = (pLib->stub.counts >> 8) & 0xFF;
 			pLib->f_count = (pLib->stub.counts >> 16) & 0xFF;
@@ -488,6 +492,9 @@ bool CProcessPrx::LoadRelocs()
 				if(m_pElfSections[iLoop].iType == SHT_PRXRELOC)
 				{
 					reloc = (Elf32_Rel*) m_pElfSections[iLoop].pData;
+					m_pElfSections[m_pElfSections[iLoop].iInfo].pRelocs = &m_pElfRelocs[iCurrRel];
+					m_pElfSections[m_pElfSections[iLoop].iInfo].iRelocCount = 
+											m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel);
 					for(iRelLoop = 0; iRelLoop < (m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel)); iRelLoop++)
 					{
 						m_pElfRelocs[iCurrRel].secname = m_pElfSections[iLoop].szName;
