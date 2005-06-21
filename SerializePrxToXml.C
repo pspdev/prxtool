@@ -74,6 +74,7 @@ bool CSerializePrxToXml::SerializeImport(int num, const PspLibImport *imp)
 
 	fprintf(m_fpOut, "\t\t\t<LIBRARY>\n");
 	fprintf(m_fpOut, "\t\t\t\t<NAME>%s</NAME>\n", imp->name);
+	fprintf(m_fpOut, "\t\t\t\t<FLAGS>0x%08X</NAME>\n", imp->stub.flags);
 
 	if(imp->f_count > 0)
 	{

@@ -1,18 +1,29 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * NidMgr.C - Implementation of a class to manipulate a list
+ * of NID Libraries.
+ ***************************************************************/
+
 #include <stdlib.h>
 #include <tinyxml/tinyxml.h>
 #include "output.h"
 #include "NidMgr.h"
 
+/* Default constructor */
 CNidMgr::CNidMgr()
 	: m_pLibHead(NULL)
 {
 }
 
+/* Destructor */
 CNidMgr::~CNidMgr()
 {
 	FreeMemory();
 }
 
+/* Free allocated memory */
 void CNidMgr::FreeMemory()
 {
 	LibraryEntry* pLib;
@@ -37,6 +48,7 @@ void CNidMgr::FreeMemory()
 	m_pLibHead = NULL;
 }
 
+/* Generate a simple name based on the library and the nid */
 const char *CNidMgr::GenName(const char *lib, u32 nid)
 {
 	if(lib == NULL)
@@ -51,6 +63,7 @@ const char *CNidMgr::GenName(const char *lib, u32 nid)
 	return m_szCurrName;
 }
 
+/* Search the NID list for a function and return the name */
 const char *CNidMgr::SearchLibs(const char *lib, u32 nid)
 {
 	const char *pName = NULL;
@@ -93,6 +106,7 @@ const char *CNidMgr::SearchLibs(const char *lib, u32 nid)
 	return pName;
 }
 
+/* Read the NID data from the XML file */
 const char* CNidMgr::ReadNid(TiXmlElement *pElement, u32 &nid)
 {
 	TiXmlHandle nidHandle(pElement);
@@ -113,6 +127,7 @@ const char* CNidMgr::ReadNid(TiXmlElement *pElement, u32 &nid)
 	return szName;
 }
 
+/* Count the number of nids in the current element */
 int CNidMgr::CountNids(TiXmlElement *pElement, const char *name)
 {
 	TiXmlElement *pIterator;
@@ -132,7 +147,8 @@ int CNidMgr::CountNids(TiXmlElement *pElement, const char *name)
 	return iCount;
 }
 
-void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name)
+/* Process a library XML element */
+void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name, const char *prx)
 {
 	TiXmlHandle libHandle(pLibrary);
 	TiXmlText *elmName;
@@ -143,6 +159,7 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name)
 	int vCount;
 	
 	assert(prx_name != NULL);
+	assert(prx != NULL);
 
 	elmName = libHandle.FirstChild("NAME").FirstChild().Text();
 	elmFlags = libHandle.FirstChild("FLAGS").FirstChild().Text();
@@ -162,6 +179,7 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name)
 			}
 
 			strcpy(pLib->prx_name, prx_name);
+			strcpy(pLib->prx, prx);
 			elmFunction = libHandle.FirstChild("FUNCTIONS").FirstChild("FUNCTION").Element();
 			elmVariable = libHandle.FirstChild("VARIABLES").FirstChild("VARIABLE").Element();
 			fCount = CountNids(elmFunction, "FUNCTION");
@@ -223,12 +241,16 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name)
 	}
 }
 
+/* Process a PRXFILE XML element */
 void CNidMgr::ProcessPrxfile(TiXmlElement *pPrxfile)
 {
 	TiXmlHandle prxHandle(pPrxfile);
 	TiXmlElement *elmLibrary;
 	TiXmlText *txtName;
+	TiXmlText *txtPrx;
+	const char *szPrx;
 
+	txtPrx = prxHandle.FirstChild("PRX").FirstChild().Text();
 	txtName = prxHandle.FirstChild("PRXNAME").FirstChild().Text();
 
 	elmLibrary = prxHandle.FirstChild("LIBRARIES").FirstChild("LIBRARY").Element();
@@ -236,15 +258,25 @@ void CNidMgr::ProcessPrxfile(TiXmlElement *pPrxfile)
 	{
 		COutput::Puts(LEVEL_DEBUG, "Found LIBRARY");
 
+		if(txtPrx == NULL)
+		{
+			szPrx = "unknown.prx";
+		}
+		else
+		{
+			szPrx = txtPrx->Value();
+		}
+
 		if(txtName != NULL)
 		{
-			ProcessLibrary(elmLibrary, txtName->Value());
+			ProcessLibrary(elmLibrary, txtName->Value(), szPrx);
 		}
 
 		elmLibrary = elmLibrary->NextSiblingElement("LIBRARY");
 	}
 }
 
+/* Add an XML file to the current library list */
 bool CNidMgr::AddXmlFile(const char *szFilename)
 {
 	TiXmlDocument doc(szFilename);
@@ -274,12 +306,13 @@ bool CNidMgr::AddXmlFile(const char *szFilename)
 	return blRet;
 }
 
-/* Find the name based on our list of names, not currently implemented */
+/* Find the name based on our list of names */
 const char *CNidMgr::FindLibName(const char *lib, u32 nid)
 {
 	return SearchLibs(lib, nid);
 }
 
+/* Iterate through the list of libraries and generate assembly stubs for use in pspsdk */
 bool CNidMgr::EmitStubs(const char *szDirectory)
 {
 	LibraryEntry *pLib;
@@ -316,6 +349,7 @@ bool CNidMgr::EmitStubs(const char *szDirectory)
 	return true;
 }
 
+/* Output a single stub file */
 bool CNidMgr::OutputStub(const char *szDirectory, LibraryEntry *pLib)
 {
 	char szPath[MAXPATH];
@@ -347,4 +381,26 @@ bool CNidMgr::OutputStub(const char *szDirectory, LibraryEntry *pLib)
 	}
 
 	return true;
+}
+
+/* Find the name of the dependany library for a specified lib */
+const char *CNidMgr::FindDependancy(const char *lib)
+{
+	LibraryEntry *pLib;
+	static char szUnknown[256];
+
+	pLib = m_pLibHead;
+
+	while(pLib != NULL)
+	{
+		if(strcmp(pLib->lib_name, lib) == 0)
+		{
+			return pLib->prx;
+		}
+
+		pLib = pLib->pNext;
+	}
+
+	sprintf(szUnknown, "Unknown (%s)", lib);
+	return szUnknown;
 }

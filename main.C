@@ -15,6 +15,7 @@ enum OutputMode
 	OUTPUT_ELF = 3,
 	OUTPUT_PRX = 4,
 	OUTPUT_STUB = 5,
+	OUTPUT_DEP = 6,
 };
 
 static char **g_ppInfiles;
@@ -58,7 +59,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xcptedo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "xcptqedo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -73,6 +74,8 @@ int process_args(int argc, char **argv)
 			case 'c' : g_outputMode = OUTPUT_IDC;
 					   break;
 			case 't' : g_outputMode = OUTPUT_STUB;
+					   break;
+			case 'q' : g_outputMode = OUTPUT_DEP;
 					   break;
 			case 'o' : g_pOutfile = optarg;
 					   break;
@@ -139,6 +142,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
 	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
 	COutput::Printf(LEVEL_INFO, "-t         : Emit stub files for the XML file passed on the command line\n");
+	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Example 1: prxtool -o output.idc -s xr myfile.prx\n");
 	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
@@ -200,6 +204,31 @@ void serialize_file(const char *file, CSerializePrx *pSer, CNidMgr *pNids)
 	}
 }
 
+void output_deps(const char *file, CNidMgr *pNids)
+{
+	CProcessPrx prx;
+
+	prx.SetNidMgr(pNids);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load prx file structures\n");
+	}
+	else
+	{
+		PspLibImport *pHead;
+		int i;
+
+		i = 0;
+		COutput::Printf(LEVEL_INFO, "Dependancy list for %s\n", file);
+		pHead = prx.GetImports();
+		while(pHead != NULL)
+		{
+			COutput::Printf(LEVEL_INFO, "Dependacy %d: %s\n", i++, pNids->FindDependancy(pHead->name));
+			pHead = pHead->next;
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	CSerializePrx *pSer;
@@ -243,7 +272,7 @@ int main(int argc, char **argv)
 					 break;
 		};
 
-		if((g_pNamefile != NULL) && (pSer != NULL))
+		if(g_pNamefile != NULL)
 		{
 			(void) nids.AddXmlFile(g_pNamefile);
 		}
@@ -268,6 +297,15 @@ int main(int argc, char **argv)
 				}
 			}
 		}
+		else if(g_outputMode == OUTPUT_DEP)
+		{
+			int iLoop;
+
+			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
+			{
+				output_deps(g_ppInfiles[iLoop], &nids);
+			}
+		}
 		else
 		{
 			int iLoop;
@@ -287,6 +325,8 @@ int main(int argc, char **argv)
 		{
 			fclose(out_fp);
 		}
+
+		COutput::Puts(LEVEL_INFO, "Done");
 	}
 	else
 	{

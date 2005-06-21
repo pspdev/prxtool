@@ -649,6 +649,7 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 											u32 hiinst;
 											u32 loinst;
 											u32 addr;
+											int ori = 0;
 
 											pData = (u32*) (pElfCopy + pTextSect->iOffset 
 													+ m_pElfRelocs[iLoop].offset - pTextSect->iAddr);
@@ -658,27 +659,34 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", iLoop, hiinst, loinst);
 
 											addr = (hiinst & 0xFFFF) << 16;
-											/* Addiu */
-											if((loinst >> 26) == 9)
+											/* ori */
+											if((loinst >> 26) == 0XD)
 											{
-												COutput::Printf(LEVEL_DEBUG, "Addiu\n");
-												addr = (s32) addr + (s16) (loinst & 0xFFFF);
-												/* Oki lets replace it with a ori so our life is easier :P */
-												loinst |= (1 << 28);
+												COutput::Printf(LEVEL_DEBUG, "ori\n");
+												addr = addr | (loinst & 0xFFFF);
+
+												ori = 1;
 											}
 											else
 											{
-												addr = addr + (loinst & 0xFFFF);
+												/* Do signed addition */
+												addr = (s32) addr + (s16) (loinst & 0xFFFF);
 											}
 
 											COutput::Printf(LEVEL_DEBUG, "%d: Address %08X\n", iLoop, addr);
 											addr += pDataSect->iAddr;
 											COutput::Printf(LEVEL_DEBUG, "%d: Address %08X\n", iLoop, addr);
 
+											if((addr & 0x8000) && (!ori))
+											{
+												addr += 0x10000;
+											}
+
 											loinst &= ~0xFFFF;
 											loinst |= (addr & 0xFFFF);
 											hiinst &= ~0xFFFF;
 											hiinst |= ((addr >> 16) & 0xFFFF);
+
 											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", iLoop, hiinst, loinst);
 											SW(*pData_HiAddr, hiinst);
 											SW(*pData, loinst);
@@ -750,4 +758,9 @@ ElfReloc* CProcessPrx::GetRelocs(int &iCount)
 {
 	iCount = m_iRelocCount;
 	return m_pElfRelocs;
+}
+
+PspLibImport *CProcessPrx::GetImports()
+{
+	return m_modInfo.imp_head;
 }
