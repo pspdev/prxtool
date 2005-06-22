@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * SerializePrx.h - Definition of a class to serialize a PRX.
+ ***************************************************************/
+
 #ifndef __SERIALIZEPRX_H__
 #define __SERIALIZEPRX_H__
 

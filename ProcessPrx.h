@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * ProcessPrx.h - Definition of a class to process PRX files.
+ ***************************************************************/
+
 #ifndef __PROCESSPRX_H__
 #define __PROCESSPRX_H__
 

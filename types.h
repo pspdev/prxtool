@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * types.h - Definition of basic cross platform types.
+ ***************************************************************/
+
 #ifndef __TYPES_H__
 #define __TYPES_H__
 

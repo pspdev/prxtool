@@ -1,3 +1,11 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * VirtualMem.h - Definition of a class to create a virtual
+ * memory space.
+ ***************************************************************/
+
 #ifndef __VIRTUALMEM_H__
 #define __VIRTUALMEM_H__
 

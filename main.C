@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * main.C - Main function for PRXTool
+ ***************************************************************/
+
 #include <stdio.h>
 #include <ctype.h>
 #include <unistd.h>

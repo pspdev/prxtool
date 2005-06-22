@@ -1,3 +1,11 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * SerializePrxToIdc.h - Definition of a class to serialize a 
+ * PRX to an IDA Pro IDC file.
+ ***************************************************************/
+
 #ifndef __SERIALIZEPRXTOIDC_H__
 #define __SERIALIZEPRXTOIDC_H__
 

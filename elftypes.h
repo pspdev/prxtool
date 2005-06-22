@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * elftypes.h - Definitions for the different ELF types.
+ ***************************************************************/
+
 #ifndef __ELF_TYPES_H__
 #define __ELF_TYPES_H__
 

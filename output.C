@@ -1,3 +1,11 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * Output.C - Static class to handle information and debug 
+ * textual output.
+ ***************************************************************/
+
 #include <stdio.h>
 #include <stdarg.h>
 #include "output.h"

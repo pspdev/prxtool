@@ -1,3 +1,11 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * SerializePrxToXml.C - Implementation of a class to serialize 
+ * a loaded PRX to an XML file.
+ ***************************************************************/
+
 #include <stdio.h>
 #include "SerializePrxToXml.h"
 

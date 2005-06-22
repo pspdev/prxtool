@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * output.h - Definition of a class to handle textual output.
+ ***************************************************************/
+
 #ifndef __OUTPUT_H__
 #define __OUTPUT_H__
 

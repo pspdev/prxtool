@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * ProcessElf.C - Implementation of a class to manipulate a ELF
+ ***************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

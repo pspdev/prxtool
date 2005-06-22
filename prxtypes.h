@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * prxtypes.h - Definition of PRX specific types.
+ ***************************************************************/
+
 #ifndef __PRXTYPES_H__
 #define __PRXTYPES_H__
 

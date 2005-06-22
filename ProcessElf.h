@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * ProcessElf.h - Definition of a class to process ELF files.
+ ***************************************************************/
+
 #ifndef __PROCESS_ELF__
 #define __PROCESS_ELF__
 

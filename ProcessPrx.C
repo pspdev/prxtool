@@ -1,3 +1,10 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * ProcessPrx.C - Implementation of a class to manipulate a PRX
+ ***************************************************************/
+
 #include <stdio.h>
 #include <string.h>
 #include <cassert>

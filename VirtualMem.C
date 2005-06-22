@@ -1,3 +1,11 @@
+/***************************************************************
+ * PRXTool : Utility for PSP executables.
+ * (c) TyRaNiD 2k5
+ *
+ * VirtualMem.C - An implementation of a class to virtualise
+ * a memory space.
+ ***************************************************************/
+
 #include <stdio.h>
 #include <string.h>
 #include "VirtualMem.h"
