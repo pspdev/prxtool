@@ -109,7 +109,7 @@ inline void sw_le(u32 &data, u32 val)
 
 inline void sh_le(u16 &data, u16 val)
 {
-	u8 *ptr (u8*) &data;
+	u8 *ptr = (u8*) &data;
 
 	ptr[0] = (u8) (val & 0xFF);
 	ptr[1] = (u8) ((val >> 8) & 0xFF);
