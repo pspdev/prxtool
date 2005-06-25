@@ -37,10 +37,11 @@ noinst_HEADERS = \
 	$(TINYXML)/tinystr.h \
 	$(TINYXML)/tinyxml.h
 
-noinst_SCRIPTS = bootstrap
-
 EXTRA_DIST = \
 	$(ACLOCAL_FILES) \
+	LICENSE \
 	$(TINYXML)/VERSION \
 	$(TINYXML)/changes.txt \
 	$(TINYXML)/readme.txt
+
+CLEANFILES = _stdint.h
