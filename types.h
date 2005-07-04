@@ -30,7 +30,7 @@ typedef int32_t		s32;
 typedef int64_t		s64;
 
 #ifdef WORDS_BIGENDIAN
-inline u32 lw_le(u32 &data)
+inline u32 lw_le(u32 data)
 {
 	u8 *ptr;
 	u32 val;
@@ -42,7 +42,7 @@ inline u32 lw_le(u32 &data)
 	return val;
 }
 
-inline u16 lh_le(u16 &data)
+inline u16 lh_le(u16 data)
 {
 	u8 *ptr;
 	u16 val;
@@ -61,7 +61,7 @@ inline u16 lh_le(u16 &data)
 
 #else
 
-inline u32 lw_be(u32 &data)
+inline u32 lw_be(u32 data)
 {
 	u8 *ptr;
 	u32 val;
@@ -73,7 +73,7 @@ inline u32 lw_be(u32 &data)
 	return val;
 }
 
-inline u16 lh_be(u16 &data)
+inline u16 lh_be(u16 data)
 {
 	u8 *ptr;
 	u16 val;
@@ -115,9 +115,9 @@ inline void sh_le(u16 &data, u16 val)
 	ptr[1] = (u8) ((val >> 8) & 0xFF);
 }
 
-#define SW_LE(x, v) (sw_le((u8*) &(x), (v)))
+#define SW_LE(x, v) (sw_le((x), (v)))
 #define SW_BE(x, v) ((x) = (v))
-#define SH_LE(x, v) (sh_le((u8*) &(x), (v)))
+#define SH_LE(x, v) (sh_le((x), (v)))
 #define SH_BE(x, v) ((x) = (v))
 
 #else
@@ -141,9 +141,9 @@ inline void sh_be(u16 &data, u16 val)
 }
 
 #define SW_LE(x, v) ((x) = (v))
-#define SW_BE(x, v) (sw_be((u8*) &(x), (v)))
+#define SW_BE(x, v) (sw_be((x), (v)))
 #define SH_LE(x, v) ((x) = (v))
-#define SH_BE(x, v) (sh_be((u8*) &(x), (v)))
+#define SH_BE(x, v) (sh_be((x), (v)))
 
 #endif
 
