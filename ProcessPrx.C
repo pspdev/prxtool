@@ -29,6 +29,13 @@ static const char* g_szRelTypes[13] =
 	"R_GPREL32"
 };
 
+/* Flag indicates the reloc offset field is relative to the text section base */
+#define RELOC_OFS_TEXT 0
+/* Flag indicates the reloc offset field is relative to the data section base */
+#define RELOC_OFS_DATA 1
+/* Flag indicates the reloc'ed field should be fixed up relative to the data section base */
+#define RELOC_REL_DATA 256
+
 CProcessPrx::CProcessPrx()
 	: CProcessElf()
 	, m_defNidMgr()
@@ -634,22 +641,43 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 	if(m_pElfRelocs != NULL)
 	{
 		int iLoop;
+		u32 iVal;
 		u32 *pData;
 		u32 *pData_HiAddr;
-		/* Any relocs with symbol == 256 fixup to base of .data */
+		/* Pointer to the base address for read/writing */
+		u8  *pBase;
+		u32 iBaseSize;
+		u32 iBaseAddr;
+		/* Any relocs with symbol & 256 fixup to base of .data */
 
 		pData = NULL;
 		pData_HiAddr = NULL;
 		iLoop = 0;
 		for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
 		{
-			if((m_pElfRelocs[iLoop].symbol == 256) && (m_pElfRelocs[iLoop].offset < pTextSect->iSize))
+			if(m_pElfRelocs[iLoop].symbol & RELOC_OFS_DATA)
+			{
+				pBase = pElfCopy + pDataSect->iOffset;
+				iBaseSize = pDataSect->iSize;
+				/* Offset for data seems to be based from start of data */
+				iBaseAddr = 0;
+			}
+			else
+			{
+				pBase = pElfCopy + pTextSect->iOffset;
+				iBaseSize = pTextSect->iSize;
+				/* Offset for text seems to be based from start of program */
+				iBaseAddr = pTextSect->iAddr;
+			}
+
+			/* Not worth the effort to properly fix up the symbols */
+			if((m_pElfRelocs[iLoop].symbol & RELOC_REL_DATA) && (m_pElfRelocs[iLoop].offset < iBaseSize))
 			{
 				switch(m_pElfRelocs[iLoop].type)
 				{
-					case R_MIPS_HI16 : pData_HiAddr = (u32*) (pElfCopy + pTextSect->iOffset 
-											   + m_pElfRelocs[iLoop].offset - pTextSect->iAddr);
-									   COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", iLoop, m_pElfRelocs[iLoop].offset);
+					case R_MIPS_HI16 : pData_HiAddr = (u32*) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
+									   COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", 
+											   iLoop, m_pElfRelocs[iLoop].offset);
 									break;
 					case R_MIPS_LO16 : 	if(pData_HiAddr != NULL)
 										{
@@ -658,13 +686,15 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 											u32 addr;
 											int ori = 0;
 
-											pData = (u32*) (pElfCopy + pTextSect->iOffset 
-													+ m_pElfRelocs[iLoop].offset - pTextSect->iAddr);
-										   COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", iLoop, m_pElfRelocs[iLoop].offset);
+											pData = (u32*) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
+										    COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", 
+												   iLoop, m_pElfRelocs[iLoop].offset);
 											hiinst = LW(*pData_HiAddr);
 											loinst = LW(*pData);
-											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", iLoop, hiinst, loinst);
+											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", 
+													iLoop, hiinst, loinst);
 
+											/* Make the guess that this only occurs on text sections */
 											addr = (hiinst & 0xFFFF) << 16;
 											/* ori */
 											if((loinst >> 26) == 0XD)
@@ -704,6 +734,11 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 										}
 
 									break;
+					case R_MIPS_32 : 	pData = (u32 *) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
+										iVal = LW(*pData);
+										iVal += pDataSect->iAddr;
+										SW(*pData, iVal);
+										break;
 					default:		COutput::Printf(LEVEL_DEBUG, "Unsupported relocation type:%d\n", m_pElfRelocs[iLoop].type);
 									break;
 				};
@@ -771,3 +806,9 @@ PspLibImport *CProcessPrx::GetImports()
 {
 	return m_modInfo.imp_head;
 }
+
+PspLibExport *CProcessPrx::GetExports()
+{
+	return m_modInfo.exp_head;
+}
+
