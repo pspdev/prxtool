@@ -478,7 +478,7 @@ bool CProcessPrx::LoadRelocs()
 
 	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 	{
-		if(m_pElfSections[iLoop].iType == SHT_PRXRELOC)
+		if((m_pElfSections[iLoop].iType == SHT_PRXRELOC) || (m_pElfSections[iLoop].iType == SHT_REL))
 		{
 			if(m_pElfSections[iLoop].iSize % sizeof(Elf32_Rel))
 			{
@@ -503,7 +503,7 @@ bool CProcessPrx::LoadRelocs()
 			memset(m_pElfRelocs, 0, sizeof(ElfReloc) * iRelocCount);
 			for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 			{
-				if(m_pElfSections[iLoop].iType == SHT_PRXRELOC)
+				if((m_pElfSections[iLoop].iType == SHT_PRXRELOC) || (m_pElfSections[iLoop].iType == SHT_REL))
 				{
 					reloc = (Elf32_Rel*) m_pElfSections[iLoop].pData;
 					m_pElfSections[m_pElfSections[iLoop].iInfo].pRelocs = &m_pElfRelocs[iCurrRel];

@@ -282,7 +282,7 @@ void output_deps(const char *file, CNidMgr *pNids)
 		pHead = prx.GetImports();
 		while(pHead != NULL)
 		{
-			COutput::Printf(LEVEL_INFO, "Dependacy %d: %s\n", i++, pNids->FindDependancy(pHead->name));
+			COutput::Printf(LEVEL_INFO, "Dependacy %d for %s: %s\n", i++, pHead->name, pNids->FindDependancy(pHead->name));
 			pHead = pHead->next;
 		}
 	}
