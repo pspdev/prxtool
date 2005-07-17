@@ -39,7 +39,7 @@ public:
 	virtual bool LoadFromFile(const char *szFilename);
 	void FixupNames();
 
-	bool FixupPrx(FILE *fp);
+	bool PrxToElf(FILE *fp);
 	bool ElfToPrx(FILE *fp);
 
 	PspModule* GetModuleInfo();

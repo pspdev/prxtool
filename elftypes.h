@@ -108,6 +108,9 @@ typedef u32 Elf32_Word;
 
 #define ELF_MAGIC	0x464C457F
 
+#define ELF_MIPS_TYPE 0x0002
+#define ELF_PRX_TYPE  0xFFA0
+
 #define SHT_NULL 0 
 #define SHT_PROGBITS 1 
 #define SHT_SYMTAB 2 
@@ -145,6 +148,16 @@ typedef u32 Elf32_Word;
 #define SHF_WRITE 		1
 #define SHF_ALLOC 		2
 #define SHF_EXECINSTR 	4
+
+#define PT_NULL 		0
+#define PT_LOAD 		1
+#define PT_DYNAMIC 		2
+#define PT_INTERP 		3
+#define PT_NOTE 		4
+#define PT_SHLIB 		5
+#define PT_PHDR 		6
+#define PT_LOPROC 		0x70000000
+#define PT_HIPROC 		0x7fffffff
 
 /* ELF file header */
 typedef struct { 

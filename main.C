@@ -172,7 +172,7 @@ void output_elf(const char *file, FILE *out_fp)
 	}
 	else
 	{
-		if(prx.FixupPrx(out_fp) == false)
+		if(prx.PrxToElf(out_fp) == false)
 		{
 			COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up ELF\n");
 		}
@@ -249,7 +249,7 @@ void output_mods(const char *file, CNidMgr *pNids)
 			pExport = pExport->next;
 		}
 
-		COutput::Printf(LEVEL_INFO, "\nExports:\n");
+		COutput::Printf(LEVEL_INFO, "\nImports:\n");
 		pImport = pMod->imp_head;
 		count = 0;
 		while(pImport != NULL)

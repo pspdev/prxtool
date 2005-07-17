@@ -513,8 +513,8 @@ bool CProcessPrx::LoadRelocs()
 					{
 						m_pElfRelocs[iCurrRel].secname = m_pElfSections[iLoop].szName;
 						m_pElfRelocs[iCurrRel].base = 0;
-						m_pElfRelocs[iCurrRel].type = ELF32_R_TYPE(reloc->r_info);
-						m_pElfRelocs[iCurrRel].symbol = ELF32_R_SYM(reloc->r_info);
+						m_pElfRelocs[iCurrRel].type = ELF32_R_TYPE(LW(reloc->r_info));
+						m_pElfRelocs[iCurrRel].symbol = ELF32_R_SYM(LW(reloc->r_info));
 						m_pElfRelocs[iCurrRel].offset = reloc->r_offset;
 						iCurrRel++;
 						reloc++;
@@ -600,7 +600,7 @@ void CProcessPrx::SetNidMgr(CNidMgr* nidMgr)
 	}
 }
 
-bool CProcessPrx::FixupPrx(FILE *fp)
+bool CProcessPrx::PrxToElf(FILE *fp)
 {
 	u8 *pElfCopy;
 	Elf32_Ehdr* pHeader;
@@ -635,7 +635,7 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 
 	/* Patch header */
 	pHeader = (Elf32_Ehdr*) pElfCopy;
-	pHeader->e_type = 2;
+	SH(pHeader->e_type, ELF_MIPS_TYPE);
 
 	/* Check for relocs */
 	if(m_pElfRelocs != NULL)
@@ -757,8 +757,11 @@ bool CProcessPrx::FixupPrx(FILE *fp)
 bool CProcessPrx::ElfToPrx(FILE *fp)
 {
 	u8 *pElfCopy;
+	Elf32_Shdr* pSection;
 	Elf32_Phdr* pProgram;
+	Elf32_Ehdr* pHeader;
 	ElfSection* pModInfoSect;
+	int iLoop;
 
 	/* Fixup the elf file and output it to fp */
 	if((fp == NULL) || (m_blPrxLoaded == false))
@@ -785,8 +788,53 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 		return false;
 	}
 	memcpy(pElfCopy, m_pElf, m_iElfSize);
-	pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
-	SW(pProgram->p_paddr, pModInfoSect->iOffset);
+
+	pHeader = (Elf32_Ehdr*) pElfCopy;
+	SH(pHeader->e_type, ELF_PRX_TYPE);
+
+	if((m_elfHeader.iPhoff > 0) && (m_elfHeader.iPhnum > 0) && (m_elfHeader.iPhentsize > 0))
+	{
+		pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
+		SW(pProgram->p_paddr, pModInfoSect->iOffset);
+		SW(pProgram->p_flags, PT_SHLIB);
+	}
+
+	/* Let's do a quick a dirty hack on the relocation tables */
+	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+	{
+		/* Only modify normal elf relocation tables */
+		if(m_pElfSections[iLoop].iType == SHT_REL)
+		{
+			int iRelLoop;
+			Elf32_Rel *reloc;
+
+			reloc = (Elf32_Rel*) (pElfCopy + m_pElfSections[iLoop].iOffset);
+			for(iRelLoop = 0; iRelLoop < (m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel)); iRelLoop++)
+			{
+				unsigned int info;
+				info = LW(reloc->r_info);
+				SW(reloc->r_info, info & 0xFF);
+				reloc++;
+			}
+		}
+	}
+
+	if((m_elfHeader.iShoff > 0) && (m_elfHeader.iShnum > 0) && (m_elfHeader.iShentsize > 0))
+	{
+		int i;
+		pSection = (Elf32_Shdr*) (pElfCopy + m_elfHeader.iShoff);
+
+		for(i = 0; i < m_elfHeader.iShnum; i++)
+		{
+			if(LW(pSection->sh_type) == SHT_REL)
+			{
+				SW(pSection->sh_type, SHT_PRXRELOC);
+			}
+
+			pSection = (Elf32_Shdr*) (((unsigned char *) pSection) + m_elfHeader.iShentsize);
+		}
+	}
+
 
 	fwrite(pElfCopy, 1, m_iElfSize, fp);
 	fflush(fp);
