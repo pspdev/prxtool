@@ -769,7 +769,7 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 		return false;
 	}
 
-	if((m_elfHeader.iPhnum == 0) || (m_elfHeader.iPhentsize == 0) || (m_elfHeader.iPhoff == 0))
+	if((m_elfHeader.iPhnum < 1) || (m_elfHeader.iPhentsize == 0) || (m_elfHeader.iPhoff == 0))
 	{
 		COutput::Puts(LEVEL_ERROR, "Invalid program header data\n");
 		return false;
@@ -792,11 +792,16 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 	pHeader = (Elf32_Ehdr*) pElfCopy;
 	SH(pHeader->e_type, ELF_PRX_TYPE);
 
-	if((m_elfHeader.iPhoff > 0) && (m_elfHeader.iPhnum > 0) && (m_elfHeader.iPhentsize > 0))
+	/* Hack the program headers */
+	pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
+	SW(pProgram->p_paddr, pModInfoSect->iOffset);
+	SW(pProgram->p_flags, 5);
+
+	if(m_elfHeader.iPhnum > 1)
 	{
-		pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
-		SW(pProgram->p_paddr, pModInfoSect->iOffset);
-		SW(pProgram->p_flags, PT_SHLIB);
+		pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff + m_elfHeader.iPhentsize);
+		SW(pProgram->p_paddr, 0);
+		SW(pProgram->p_flags, 6);
 	}
 
 	/* Let's do a quick a dirty hack on the relocation tables */
