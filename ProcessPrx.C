@@ -794,7 +794,14 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 
 	/* Hack the program headers */
 	pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
-	SW(pProgram->p_paddr, pModInfoSect->iOffset);
+	if(m_modInfo.info.flags & 0x1000)
+	{
+		SW(pProgram->p_paddr, 0x80000000 | pModInfoSect->iOffset);
+	}
+	else
+	{
+		SW(pProgram->p_paddr, pModInfoSect->iOffset);
+	}
 	SW(pProgram->p_flags, 5);
 
 	if(m_elfHeader.iPhnum > 1)
