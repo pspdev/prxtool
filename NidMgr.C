@@ -368,7 +368,7 @@ bool CNidMgr::OutputStub(const char *szDirectory, LibraryEntry *pLib)
 	if(fp != NULL)
 	{
 		fprintf(fp, "\t.set noreorder\n\n");
-		fprintf(fp, "#include \"common.s\"\n\n");
+		fprintf(fp, "#include \"pspstub.s\"\n\n");
 		fprintf(fp, "\tSTUB_START\t\"%s\",0x%08X,0x%08X\n", pLib->lib_name, pLib->flags, (pLib->fcount << 16) | 5);
 
 		for(int i = 0; i < pLib->fcount; i++)

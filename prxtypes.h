@@ -14,7 +14,8 @@
 #define PSP_LIB_MAX_NAME 128
 #define PSP_ENTRY_MAX_NAME 128
 /* Define the maximum number of permitted entries per lib */
-#define PSP_MAX_ENTRIES 255
+#define PSP_MAX_V_ENTRIES 255
+#define PSP_MAX_F_ENTRIES 65535
 
 #define PSP_MODULE_INFO_NAME ".rodata.sceModuleInfo"
 
@@ -89,11 +90,11 @@ struct PspLibImport
 	/* Copy of the import stub (in native byte order) */
 	PspModuleImport stub;
 	/* List of function entries */
-	PspEntry funcs[PSP_MAX_ENTRIES];
+	PspEntry funcs[PSP_MAX_F_ENTRIES];
 	/* Number of function entries */
 	int f_count;
 	/* List of variable entried */
-	PspEntry vars[PSP_MAX_ENTRIES];
+	PspEntry vars[PSP_MAX_V_ENTRIES];
 	/* Number of variable entires */
 	int v_count;
 };
@@ -112,11 +113,11 @@ struct PspLibExport
 	/** Copy of the import stub (in native byte order) */
 	PspModuleExport stub;
 	/** List of function entries */
-	PspEntry funcs[PSP_MAX_ENTRIES];
+	PspEntry funcs[PSP_MAX_F_ENTRIES];
 	/** Number of function entries */
 	int f_count;
 	/** List of variable entried */
-	PspEntry vars[PSP_MAX_ENTRIES];
+	PspEntry vars[PSP_MAX_V_ENTRIES];
 	/** Number of variable entires */
 	int v_count;
 };

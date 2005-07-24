@@ -140,7 +140,7 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 			}
 
 			pLib->v_count = 0;
-			pLib->f_count = (pLib->stub.counts >> 16) & 0xFF;
+			pLib->f_count = (pLib->stub.counts >> 16) & 0xFFFF;
 			count = pLib->stub.counts & 0xFF;
 			nidAddr = pLib->stub.nids;
 			funcAddr = pLib->stub.funcs;
@@ -302,7 +302,7 @@ int CProcessPrx::LoadSingleExport(PspModuleExport *pExport, u32 addr)
 					pLib->stub.flags, pLib->stub.counts, pLib->stub.exports);
 
 			pLib->v_count = (pLib->stub.counts >> 8) & 0xFF;
-			pLib->f_count = (pLib->stub.counts >> 16) & 0xFF;
+			pLib->f_count = (pLib->stub.counts >> 16) & 0xFFFF;
 			count = pLib->stub.counts & 0xFF;
 			expAddr = pLib->stub.exports;
 
