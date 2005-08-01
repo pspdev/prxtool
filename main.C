@@ -24,6 +24,7 @@ enum OutputMode
 	OUTPUT_STUB = 5,
 	OUTPUT_DEP = 6,
 	OUTPUT_MOD = 7,
+	OUTPUT_PSTUB = 8,
 };
 
 static char **g_ppInfiles;
@@ -67,7 +68,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xcptqemdo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "xcptuqemdo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -84,6 +85,8 @@ int process_args(int argc, char **argv)
 			case 't' : g_outputMode = OUTPUT_STUB;
 					   break;
 			case 'q' : g_outputMode = OUTPUT_DEP;
+					   break;
+			case 'u' : g_outputMode = OUTPUT_PSTUB;
 					   break;
 			case 'o' : g_pOutfile = optarg;
 					   break;
@@ -152,6 +155,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
 	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
 	COutput::Printf(LEVEL_INFO, "-t         : Emit stub files for the XML file passed on the command line\n");
+	COutput::Printf(LEVEL_INFO, "-u         : Emit stub files based on the exports of the specified prx files\n");
 	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
 	COutput::Printf(LEVEL_INFO, "-m         : Print the module and library information to screen\n");
 	COutput::Printf(LEVEL_INFO, "\n");
@@ -288,6 +292,65 @@ void output_deps(const char *file, CNidMgr *pNids)
 	}
 }
 
+void write_stub(const char *szDirectory, PspLibExport *pExp)
+{
+	char szPath[MAXPATH];
+	FILE *fp;
+	COutput::Printf(LEVEL_DEBUG, "Library %s\n", pExp->name);
+	if(pExp->v_count != 0)
+	{
+		COutput::Printf(LEVEL_WARNING, "%s: Stub output does not currently support variables\n", pExp->name);
+	}
+
+	strcpy(szPath, szDirectory);
+	strcat(szPath, pExp->name);
+	strcat(szPath, ".S");
+
+	fp = fopen(szPath, "w");
+	if(fp != NULL)
+	{
+		fprintf(fp, "\t.set noreorder\n\n");
+		fprintf(fp, "#include \"pspstub.s\"\n\n");
+		fprintf(fp, "\tSTUB_START\t\"%s\",0x%08X,0x%08X\n", pExp->name, pExp->stub.flags, (pExp->f_count << 16) | 5);
+
+		for(int i = 0; i < pExp->f_count; i++)
+		{
+			fprintf(fp, "\tSTUB_FUNC\t0x%08X,%s\n", pExp->funcs[i].nid, pExp->funcs[i].name);
+		}
+
+		fprintf(fp, "\tSTUB_END\n");
+		fclose(fp);
+	}
+}
+
+void output_stubs(const char *file, CNidMgr *pNids)
+{
+	CProcessPrx prx;
+
+	prx.SetNidMgr(pNids);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load prx file structures\n");
+	}
+	else
+	{
+		PspLibExport *pHead;
+		int i;
+
+		i = 0;
+		COutput::Printf(LEVEL_INFO, "Dependancy list for %s\n", file);
+		pHead = prx.GetExports();
+		while(pHead != NULL)
+		{
+			if(strcmp(pHead->name, PSP_SYSTEM_EXPORT) != 0)
+			{
+				write_stub("", pHead);
+			}
+			pHead = pHead->next;
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
 	CSerializePrx *pSer;
@@ -372,6 +435,15 @@ int main(int argc, char **argv)
 			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
 			{
 				output_mods(g_ppInfiles[iLoop], &nids);
+			}
+		}
+		else if(g_outputMode == OUTPUT_PSTUB)
+		{
+			int iLoop;
+
+			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
+			{
+				output_stubs(g_ppInfiles[iLoop], &nids);
 			}
 		}
 		else
