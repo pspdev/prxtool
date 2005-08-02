@@ -240,7 +240,7 @@ void output_mods(const char *file, CNidMgr *pNids)
 		COutput::Printf(LEVEL_INFO, "Name:    %s\n", pMod->name);
 		COutput::Printf(LEVEL_INFO, "Attrib:  %04X\n", pMod->info.flags & 0xFFFF);
 		COutput::Printf(LEVEL_INFO, "Version: %d.%d\n", 
-				(pMod->info.flags >> 16) & 0xFF, (pMod->info.flags >> 24) & 0xFF);
+				(pMod->info.flags >> 24) & 0xFF, (pMod->info.flags >> 16) & 0xFF);
 		COutput::Printf(LEVEL_INFO, "GP:      %08X\n", pMod->info.gp);
 
 		COutput::Printf(LEVEL_INFO, "\nExports:\n");
