@@ -7,8 +7,12 @@ This README is going to be short and to the point.
 
 Installation:
 
-Do the old ./configure thing, then type make (or gmake). You can then install
-the tool if you want using make install.
+Do the old ./bootstrap and ./configure thing, then type make (or gmake). You can
+then install the tool if you want using make install.
+
+Example:
+
+./bootstrap; ./configure; make; make install
 
 Usage:
 
