@@ -312,75 +312,9 @@ const char *CNidMgr::FindLibName(const char *lib, u32 nid)
 	return SearchLibs(lib, nid);
 }
 
-/* Iterate through the list of libraries and generate assembly stubs for use in pspsdk */
-bool CNidMgr::EmitStubs(const char *szDirectory)
+LibraryEntry *CNidMgr::GetLibraries(void)
 {
-	LibraryEntry *pLib;
-	char szPath[MAXPATH];
-	int pathLen;
-
-	memset(szPath, 0, MAXPATH);
-	if(szDirectory != NULL)
-	{
-		strcpy(szPath, szDirectory);
-	}
-	pathLen = strlen(szPath);
-	if((pathLen > 0) && (szPath[pathLen-1] != '/') && (szPath[pathLen-1] != '\\'))
-	{
-		szPath[pathLen-1] = '/';
-		szPath[pathLen] = 0;
-		pathLen++;
-	}
-
-	pLib = m_pLibHead;
-
-
-	while(pLib != NULL)
-	{
-		/* Ignore failure */
-		if(OutputStub(szPath, pLib) == false)
-		{
-			COutput::Printf(LEVEL_ERROR, "Could not create stub file for library %s\n", pLib->lib_name);
-		}
-
-		pLib = pLib->pNext;
-	}
-
-	return true;
-}
-
-/* Output a single stub file */
-bool CNidMgr::OutputStub(const char *szDirectory, LibraryEntry *pLib)
-{
-	char szPath[MAXPATH];
-	FILE *fp;
-	COutput::Printf(LEVEL_DEBUG, "Library %s\n", pLib->lib_name);
-	if(pLib->vcount != 0)
-	{
-		COutput::Printf(LEVEL_WARNING, "%s: Stub output does not currently support variables\n", pLib->lib_name);
-	}
-
-	strcpy(szPath, szDirectory);
-	strcat(szPath, pLib->lib_name);
-	strcat(szPath, ".S");
-
-	fp = fopen(szPath, "w");
-	if(fp != NULL)
-	{
-		fprintf(fp, "\t.set noreorder\n\n");
-		fprintf(fp, "#include \"pspstub.s\"\n\n");
-		fprintf(fp, "\tSTUB_START\t\"%s\",0x%08X,0x%08X\n", pLib->lib_name, pLib->flags, (pLib->fcount << 16) | 5);
-
-		for(int i = 0; i < pLib->fcount; i++)
-		{
-			fprintf(fp, "\tSTUB_FUNC\t0x%08X,%s\n", pLib->pNids[i].nid, pLib->pNids[i].name);
-		}
-
-		fprintf(fp, "\tSTUB_END\n");
-		fclose(fp);
-	}
-
-	return true;
+	return m_pLibHead;
 }
 
 /* Find the name of the dependany library for a specified lib */

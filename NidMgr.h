@@ -63,14 +63,13 @@ class CNidMgr
 	int CountNids(TiXmlElement *pElement, const char *name);
 	void ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name, const char *prx);
 	void ProcessPrxfile(TiXmlElement *pPrxfile);
-	bool OutputStub(const char *szDirectory, LibraryEntry *pLib);
 public:
 	CNidMgr();
 	~CNidMgr();
 	const char *FindLibName(const char *lib, u32 nid);
 	const char *FindDependancy(const char *lib);
 	bool AddXmlFile(const char *szFilename);
-	bool EmitStubs(const char *szDirectory);
+	LibraryEntry *GetLibraries(void);
 };
 
 #endif

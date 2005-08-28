@@ -34,6 +34,7 @@ static char *g_pNamefile;
 static bool g_blDebug;
 static OutputMode g_outputMode;
 static u32 g_iSMask;
+static int g_newstubs;
 
 void DoOutput(OutputLevel level, const char *str)
 {
@@ -61,6 +62,7 @@ void init_args()
 	g_blDebug = false;
 	g_outputMode = OUTPUT_IDC;
 	g_iSMask = SERIALIZE_ALL;
+	g_newstubs = 0;
 }
 
 int process_args(int argc, char **argv)
@@ -68,7 +70,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xcptuqemdo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "xckptuqemdo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -93,6 +95,8 @@ int process_args(int argc, char **argv)
 			case 'n' : g_pNamefile = optarg;
 					   break;
 			case 'm' : g_outputMode = OUTPUT_MOD;
+					   break;
+			case 'k' : g_newstubs = 1;
 					   break;
 			case 's' : {
 						   int i;
@@ -156,6 +160,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
 	COutput::Printf(LEVEL_INFO, "-t         : Emit stub files for the XML file passed on the command line\n");
 	COutput::Printf(LEVEL_INFO, "-u         : Emit stub files based on the exports of the specified prx files\n");
+	COutput::Printf(LEVEL_INFO, "-k         : Emit new style stubs for the SDK\n");
 	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
 	COutput::Printf(LEVEL_INFO, "-m         : Print the module and library information to screen\n");
 	COutput::Printf(LEVEL_INFO, "\n");
@@ -323,7 +328,51 @@ void write_stub(const char *szDirectory, PspLibExport *pExp)
 	}
 }
 
-void output_stubs(const char *file, CNidMgr *pNids)
+void write_stub_new(const char *szDirectory, PspLibExport *pExp)
+{
+	char szPath[MAXPATH];
+	FILE *fp;
+	COutput::Printf(LEVEL_DEBUG, "Library %s\n", pExp->name);
+	if(pExp->v_count != 0)
+	{
+		COutput::Printf(LEVEL_WARNING, "%s: Stub output does not currently support variables\n", pExp->name);
+	}
+
+	strcpy(szPath, szDirectory);
+	strcat(szPath, pExp->name);
+	strcat(szPath, ".S");
+
+	fp = fopen(szPath, "w");
+	if(fp != NULL)
+	{
+		fprintf(fp, "\t.set noreorder\n\n");
+		fprintf(fp, "#include \"pspimport.s\"\n\n");
+
+		fprintf(fp, "// Build List\n");
+		fprintf(fp, "// stub_%s.o ", pExp->name);
+		for(int i = 0; i < pExp->f_count; i++)
+		{
+			fprintf(fp, "%s.o ", pExp->funcs[i].name);
+		}
+		fprintf(fp, "\n\n");
+
+		fprintf(fp, "#ifdef F_stub_%s\n", pExp->name);
+		fprintf(fp, "\tIMPORT_START\t\"%s\",0x%08X\n", pExp->name, pExp->stub.flags);
+		fprintf(fp, "#endif\n");
+
+		for(int i = 0; i < pExp->f_count; i++)
+		{
+			fprintf(fp, "#ifdef F_%s\n", pExp->funcs[i].name);
+			fprintf(fp, "\tIMPORT_FUNC\t\"%s\",0x%08X,%s\n", pExp->name, pExp->funcs[i].nid, pExp->funcs[i].name);
+			fprintf(fp, "#endif\n");
+		}
+			
+		fclose(fp);
+	}
+}
+
+
+void output_stubs_prx(const char *file, CNidMgr *pNids)
 {
 	CProcessPrx prx;
 
@@ -344,10 +393,61 @@ void output_stubs(const char *file, CNidMgr *pNids)
 		{
 			if(strcmp(pHead->name, PSP_SYSTEM_EXPORT) != 0)
 			{
-				write_stub("", pHead);
+				if(g_newstubs)
+				{
+					write_stub_new("", pHead);
+				}
+				else
+				{
+					write_stub("", pHead);
+				}
 			}
 			pHead = pHead->next;
 		}
+	}
+}
+
+void output_stubs_xml(CNidMgr *pNids)
+{
+	LibraryEntry *pLib = NULL;
+	PspLibExport *pExp = NULL;
+
+	pLib = pNids->GetLibraries();
+	pExp = new PspLibExport;
+
+	while(pLib != NULL)
+	{
+		/* Convery the LibraryEntry into a valid PspLibExport */
+		int i;
+
+		memset(pExp, 0, sizeof(PspLibExport));
+		strcpy(pExp->name, pLib->lib_name);
+		pExp->f_count = pLib->fcount;
+		pExp->v_count = pLib->vcount;
+		pExp->stub.flags = pLib->flags;
+
+		for(i = 0; i < pExp->f_count; i++)
+		{
+			pExp->funcs[i].nid = pLib->pNids[i].nid;
+			strcpy(pExp->funcs[i].name, pLib->pNids[i].name);
+		}
+
+		if(g_newstubs)
+		{
+			write_stub_new("", pExp);
+		}
+		else
+		{
+			write_stub("", pExp);
+		}
+
+		pLib = pLib->pNext;
+	}
+
+	if(pExp != NULL)
+	{
+		delete pExp;
+		pExp = NULL;
 	}
 }
 
@@ -413,10 +513,7 @@ int main(int argc, char **argv)
 
 			if(nidData.AddXmlFile(g_ppInfiles[0]))
 			{
-				if(nidData.EmitStubs("") == false)
-				{
-					COutput::Puts(LEVEL_ERROR, "Failed to emit stubs");
-				}
+				output_stubs_xml(&nidData);
 			}
 		}
 		else if(g_outputMode == OUTPUT_DEP)
@@ -443,7 +540,7 @@ int main(int argc, char **argv)
 
 			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
 			{
-				output_stubs(g_ppInfiles[iLoop], &nids);
+				output_stubs_prx(g_ppInfiles[iLoop], &nids);
 			}
 		}
 		else
