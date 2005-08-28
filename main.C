@@ -352,7 +352,7 @@ void write_stub_new(const char *szDirectory, PspLibExport *pExp)
 		fprintf(fp, "// stub_%s.o ", pExp->name);
 		for(int i = 0; i < pExp->f_count; i++)
 		{
-			fprintf(fp, "%s.o ", pExp->funcs[i].name);
+			fprintf(fp, "%08X_%s.o ", i, pExp->funcs[i].name);
 		}
 		fprintf(fp, "\n\n");
 
@@ -362,7 +362,7 @@ void write_stub_new(const char *szDirectory, PspLibExport *pExp)
 
 		for(int i = 0; i < pExp->f_count; i++)
 		{
-			fprintf(fp, "#ifdef F_%s\n", pExp->funcs[i].name);
+			fprintf(fp, "#ifdef F_%08X_%s\n", i, pExp->funcs[i].name);
 			fprintf(fp, "\tIMPORT_FUNC\t\"%s\",0x%08X,%s\n", pExp->name, pExp->funcs[i].nid, pExp->funcs[i].name);
 			fprintf(fp, "#endif\n");
 		}
