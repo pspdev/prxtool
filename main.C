@@ -349,20 +349,20 @@ void write_stub_new(const char *szDirectory, PspLibExport *pExp)
 		fprintf(fp, "#include \"pspimport.s\"\n\n");
 
 		fprintf(fp, "// Build List\n");
-		fprintf(fp, "// stub_%s.o ", pExp->name);
+		fprintf(fp, "// %s_0000.o ", pExp->name);
 		for(int i = 0; i < pExp->f_count; i++)
 		{
-			fprintf(fp, "%08X_%s.o ", i, pExp->funcs[i].name);
+			fprintf(fp, "%s_%04d.o ", pExp->name, i + 1);
 		}
 		fprintf(fp, "\n\n");
 
-		fprintf(fp, "#ifdef F_stub_%s\n", pExp->name);
+		fprintf(fp, "#ifdef F_%s_0000\n", pExp->name);
 		fprintf(fp, "\tIMPORT_START\t\"%s\",0x%08X\n", pExp->name, pExp->stub.flags);
 		fprintf(fp, "#endif\n");
 
 		for(int i = 0; i < pExp->f_count; i++)
 		{
-			fprintf(fp, "#ifdef F_%08X_%s\n", i, pExp->funcs[i].name);
+			fprintf(fp, "#ifdef F_%s_%04d\n", pExp->name, i + 1);
 			fprintf(fp, "\tIMPORT_FUNC\t\"%s\",0x%08X,%s\n", pExp->name, pExp->funcs[i].nid, pExp->funcs[i].name);
 			fprintf(fp, "#endif\n");
 		}
