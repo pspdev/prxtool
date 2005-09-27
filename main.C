@@ -25,6 +25,7 @@ enum OutputMode
 	OUTPUT_DEP = 6,
 	OUTPUT_MOD = 7,
 	OUTPUT_PSTUB = 8,
+	OUTPUT_IMPEXP = 9,
 };
 
 static char **g_ppInfiles;
@@ -70,7 +71,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "xckptuqemdo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "fxckptuqemdo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -97,6 +98,8 @@ int process_args(int argc, char **argv)
 			case 'm' : g_outputMode = OUTPUT_MOD;
 					   break;
 			case 'k' : g_newstubs = 1;
+					   break;
+			case 'f' : g_outputMode = OUTPUT_IMPEXP;
 					   break;
 			case 's' : {
 						   int i;
@@ -163,6 +166,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-k         : Emit new style stubs for the SDK\n");
 	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
 	COutput::Printf(LEVEL_INFO, "-m         : Print the module and library information to screen\n");
+	COutput::Printf(LEVEL_INFO, "-f         : Print the imports and exports of a prx\n");
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Example 1: prxtool -o output.idc -s xr myfile.prx\n");
 	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
@@ -265,6 +269,93 @@ void output_mods(const char *file, CNidMgr *pNids)
 		{
 			COutput::Printf(LEVEL_INFO, "Import %d, Name %s, Functions %d, Variables %d, flags %08X\n", 
 					count++, pImport->name, pImport->f_count, pImport->v_count, pImport->stub.flags);
+			pImport = pImport->next;
+		}
+
+	}
+
+}
+
+void output_importexport(const char *file, CNidMgr *pNids)
+{
+	CProcessPrx prx;
+	int iLoop;
+
+	prx.SetNidMgr(pNids);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load prx file structures\n");
+	}
+	else
+	{
+		PspModule *pMod;
+		PspLibExport *pExport;
+		PspLibImport *pImport;
+		int count;
+
+		pMod = prx.GetModuleInfo();
+		COutput::Puts(LEVEL_INFO, "Module information\n");
+		COutput::Printf(LEVEL_INFO, "Name:    %s\n", pMod->name);
+		COutput::Printf(LEVEL_INFO, "Attrib:  %04X\n", pMod->info.flags & 0xFFFF);
+		COutput::Printf(LEVEL_INFO, "Version: %d.%d\n", 
+				(pMod->info.flags >> 24) & 0xFF, (pMod->info.flags >> 16) & 0xFF);
+		COutput::Printf(LEVEL_INFO, "GP:      %08X\n", pMod->info.gp);
+
+		COutput::Printf(LEVEL_INFO, "\nExports:\n");
+		pExport = pMod->exp_head;
+		count = 0;
+		while(pExport != NULL)
+		{
+			COutput::Printf(LEVEL_INFO, "Export %d, Name %s, Functions %d, Variables %d, flags %08X\n", 
+					count++, pExport->name, pExport->f_count, pExport->v_count, pExport->stub.flags);
+
+			if(pExport->f_count > 0)
+			{
+				COutput::Printf(LEVEL_INFO, "Functions:\n");
+				for(iLoop = 0; iLoop < pExport->f_count; iLoop++)
+				{
+					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pExport->funcs[iLoop].nid, pExport->funcs[iLoop].name);
+				}
+			}
+
+			if(pExport->v_count > 0)
+			{
+				COutput::Printf(LEVEL_INFO, "Variables:\n");
+				for(iLoop = 0; iLoop < pExport->v_count; iLoop++)
+				{
+					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pExport->vars[iLoop].nid, pExport->vars[iLoop].name);
+				}
+			}
+
+			pExport = pExport->next;
+		}
+
+		COutput::Printf(LEVEL_INFO, "\nImports:\n");
+		pImport = pMod->imp_head;
+		count = 0;
+		while(pImport != NULL)
+		{
+			COutput::Printf(LEVEL_INFO, "Import %d, Name %s, Functions %d, Variables %d, flags %08X\n", 
+					count++, pImport->name, pImport->f_count, pImport->v_count, pImport->stub.flags);
+
+			if(pImport->f_count > 0)
+			{
+				COutput::Printf(LEVEL_INFO, "Functions:\n");
+				for(iLoop = 0; iLoop < pImport->f_count; iLoop++)
+				{
+					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pImport->funcs[iLoop].nid, pImport->funcs[iLoop].name);
+				}
+			}
+
+			if(pImport->v_count > 0)
+			{
+				COutput::Printf(LEVEL_INFO, "Variables:\n");
+				for(iLoop = 0; iLoop < pImport->v_count; iLoop++)
+				{
+					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pImport->vars[iLoop].nid, pImport->vars[iLoop].name);
+				}
+			}
+
 			pImport = pImport->next;
 		}
 
@@ -541,6 +632,15 @@ int main(int argc, char **argv)
 			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
 			{
 				output_stubs_prx(g_ppInfiles[iLoop], &nids);
+			}
+		}
+		else if(g_outputMode == OUTPUT_IMPEXP)
+		{
+			int iLoop;
+
+			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
+			{
+				output_importexport(g_ppInfiles[iLoop], &nids);
 			}
 		}
 		else
