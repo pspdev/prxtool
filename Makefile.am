@@ -44,4 +44,4 @@ EXTRA_DIST = \
 	$(TINYXML)/changes.txt \
 	$(TINYXML)/readme.txt
 
-CLEANFILES = _stdint.h
+DISTCLEANFILES = _stdint.h
