@@ -872,3 +872,8 @@ PspLibExport *CProcessPrx::GetExports()
 	return m_modInfo.exp_head;
 }
 
+ElfSymbol* CProcessPrx::GetSymbols(int &iCount)
+{
+	iCount = m_iSymCount;
+	return m_pElfSymbols;
+}

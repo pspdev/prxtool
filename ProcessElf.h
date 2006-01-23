@@ -35,6 +35,10 @@ protected:
 	ElfSection *m_pElfStrtab;
 	/* Holds the elf header information */
 	ElfHeader m_elfHeader;
+	/* List of symbols */
+	ElfSymbol *m_pElfSymbols;
+	/* Number of symbols */
+	int m_iSymCount;
 
 	/* The base address of the ELF */
 	u32 m_iBaseAddr;

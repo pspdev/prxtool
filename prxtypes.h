@@ -137,4 +137,22 @@ struct PspModule
 	PspLibImport *imp_head;
 };
 
+#define SYMFILE_MAGIC "SYMS"
+
+struct SymfileHeader
+{
+	char magic[4];
+	char modname[PSP_MODULE_MAX_NAME];
+	u32  symcount;
+	u32  strstart;
+	u32  strsize;
+} __attribute__((packed));
+
+struct SymfileEntry
+{
+	u32 name;
+	u32 addr;
+	u32 size;
+} __attribute__((packed));
+
 #endif

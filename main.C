@@ -26,6 +26,7 @@ enum OutputMode
 	OUTPUT_MOD = 7,
 	OUTPUT_PSTUB = 8,
 	OUTPUT_IMPEXP = 9,
+	OUTPUT_SYMBOLS = 10,
 };
 
 static char **g_ppInfiles;
@@ -71,7 +72,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "fxckptuqemdo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "fxckptuqemdyo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -129,6 +130,8 @@ int process_args(int argc, char **argv)
 						   }
 					   }
 					   break;
+			case 'y': g_outputMode = OUTPUT_SYMBOLS;
+					  break;
 			case '?':
 			default:
 					   return 0;
@@ -167,6 +170,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
 	COutput::Printf(LEVEL_INFO, "-m         : Print the module and library information to screen\n");
 	COutput::Printf(LEVEL_INFO, "-f         : Print the imports and exports of a prx\n");
+	COutput::Printf(LEVEL_INFO, "-y         : Output special symbols file\n");
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Example 1: prxtool -o output.idc -s xr myfile.prx\n");
 	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
@@ -206,6 +210,98 @@ void output_prx(const char *file, FILE *out_fp)
 		if(prx.ElfToPrx(out_fp) == false)
 		{
 			COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up PRX\n");
+		}
+	}
+}
+
+int compare_symbols(const void *left, const void *right)
+{
+	ElfSymbol *pLeft, *pRight;
+
+	pLeft = (ElfSymbol *) left;
+	pRight = (ElfSymbol *) right;
+
+	return ((int) pLeft->value) - ((int) pRight->value);
+}
+
+void output_symbols(const char *file, FILE *out_fp)
+{
+	CProcessPrx prx;
+
+	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures");
+	}
+	else
+	{
+		ElfSymbol *pSymbols;
+		ElfSymbol *pSymCopy;
+		SymfileHeader fileHead;
+		int iSymCount;
+		int iSymCopyCount;
+		int iStrSize;
+		int iStrPos;
+
+		pSymbols = prx.GetSymbols(iSymCount);
+		if(pSymbols != NULL)
+		{
+			SAFE_ALLOC(pSymCopy, ElfSymbol[iSymCount]);
+			if(pSymCopy)
+			{
+				iSymCopyCount = 0;
+				iStrSize = 0;
+				iStrPos  = 0;
+				/* Calculate the sizes */
+				for(int i = 0; i < iSymCount; i++)
+				{
+					int type;
+
+					type = ELF32_ST_TYPE(pSymbols[i].info);
+					if(((type == STT_FUNC) || (type == STT_OBJECT)) && (strlen(pSymbols[i].symname) > 0))
+					{
+						memcpy(&pSymCopy[iSymCopyCount], &pSymbols[i], sizeof(ElfSymbol));
+						iSymCopyCount++;
+						iStrSize += strlen(pSymbols[i].symname) + 1;
+					}
+				}
+
+				COutput::Printf(LEVEL_DEBUG, "Removed %d symbols, leaving %d\n", iSymCount - iSymCopyCount, iSymCopyCount);
+				COutput::Printf(LEVEL_DEBUG, "String size %d\n", iSymCount - iSymCopyCount, iSymCopyCount);
+				qsort(pSymCopy, iSymCopyCount, sizeof(ElfSymbol), compare_symbols);
+				memcpy(fileHead.magic, SYMFILE_MAGIC, 4);
+				memcpy(fileHead.modname, prx.GetModuleInfo()->name, PSP_MODULE_MAX_NAME);
+				SW(fileHead.symcount, iSymCopyCount);
+				SW(fileHead.strstart, sizeof(fileHead) + (sizeof(SymfileEntry)*iSymCopyCount));
+				SW(fileHead.strsize, iStrSize);
+				fwrite(&fileHead, 1, sizeof(fileHead), out_fp);
+				for(int i = 0; i < iSymCopyCount; i++)
+				{
+					SymfileEntry sym;
+
+					SW(sym.name, iStrPos);
+					SW(sym.addr, pSymCopy[i].value);
+					SW(sym.size, pSymCopy[i].size);
+					iStrPos += strlen(pSymCopy[i].symname)+1;
+					fwrite(&sym, 1, sizeof(sym), out_fp);
+				}
+
+				/* Write out string table */
+				for(int i = 0; i < iSymCopyCount; i++)
+				{
+					fwrite(pSymCopy[i].symname, 1, strlen(pSymCopy[i].symname)+1, out_fp);
+				}
+
+				delete pSymCopy;
+			}
+			else
+			{
+				COutput::Puts(LEVEL_ERROR, "Could not allocate memory for symbol copy\n");
+			}
+		}
+		else
+		{
+			COutput::Puts(LEVEL_ERROR, "No symbols available");
 		}
 	}
 }
@@ -642,6 +738,10 @@ int main(int argc, char **argv)
 			{
 				output_importexport(g_ppInfiles[iLoop], &nids);
 			}
+		}
+		else if(g_outputMode == OUTPUT_SYMBOLS)
+		{
+			output_symbols(g_ppInfiles[0], out_fp);
 		}
 		else
 		{

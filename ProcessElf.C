@@ -23,6 +23,8 @@ CProcessElf::CProcessElf()
 	, m_pElfPrograms(NULL)
 	, m_iPHCount(0)
 	, m_pElfStrtab(NULL)
+	, m_pElfSymbols(NULL)
+	, m_iSymCount(0)
 	, m_iBaseAddr(0)
 {
 	memset(&m_elfHeader, 0, sizeof(m_elfHeader));
@@ -45,6 +47,12 @@ void CProcessElf::FreeMemory()
 	{
 		delete m_pElfPrograms;
 		m_pElfPrograms = NULL;
+	}
+
+	if(m_pElfSymbols != NULL)
+	{
+		delete m_pElfSymbols;
+		m_pElfSymbols = NULL;
 	}
 
 	/* Just an aliased pointer */
@@ -325,19 +333,34 @@ bool CProcessElf::LoadSymbols()
 
 		symidx = pSymtab->iLink;
 		iSymcount = pSymtab->iSize / sizeof(Elf32_Sym);
-		pSym = (Elf32_Sym*) pSymtab->pData;
-		for(iLoop = 0; iLoop < iSymcount; iLoop++)
+		SAFE_ALLOC(m_pElfSymbols, ElfSymbol[iSymcount]);
+		if(m_pElfSymbols != NULL)
 		{
-			name = LW(pSym->st_name);
-
-			COutput::Printf(LEVEL_DEBUG, "Symbol %d\n", iLoop);
-			COutput::Printf(LEVEL_DEBUG, "Name %d, '%s'\n", name, GetSymbolName(name, symidx));
-			COutput::Printf(LEVEL_DEBUG, "Value %08X\n", LW(pSym->st_value));
-			COutput::Printf(LEVEL_DEBUG, "Size  %08X\n", LW(pSym->st_size));
-			COutput::Printf(LEVEL_DEBUG, "Info  %02X\n", pSym->st_info);
-			COutput::Printf(LEVEL_DEBUG, "Other %02X\n", pSym->st_other);
-			COutput::Printf(LEVEL_DEBUG, "Shndx %04X\n\n", LH(pSym->st_shndx));
-			pSym++;
+			m_iSymCount = iSymcount;
+			pSym = (Elf32_Sym*) pSymtab->pData;
+			for(iLoop = 0; iLoop < iSymcount; iLoop++)
+			{
+				m_pElfSymbols[iLoop].name = LW(pSym->st_name);
+				m_pElfSymbols[iLoop].symname = GetSymbolName(m_pElfSymbols[iLoop].name, symidx);
+				m_pElfSymbols[iLoop].value = LW(pSym->st_value);
+				m_pElfSymbols[iLoop].size = LW(pSym->st_size);
+				m_pElfSymbols[iLoop].info = pSym->st_info;
+				m_pElfSymbols[iLoop].other = pSym->st_other;
+				m_pElfSymbols[iLoop].shndx = LH(pSym->st_shndx);
+				COutput::Printf(LEVEL_DEBUG, "Symbol %d\n", iLoop);
+				COutput::Printf(LEVEL_DEBUG, "Name %d, '%s'\n", m_pElfSymbols[iLoop].name, m_pElfSymbols[iLoop].symname);
+				COutput::Printf(LEVEL_DEBUG, "Value %08X\n",m_pElfSymbols[iLoop].value);
+				COutput::Printf(LEVEL_DEBUG, "Size  %08X\n", m_pElfSymbols[iLoop].size);
+				COutput::Printf(LEVEL_DEBUG, "Info  %02X\n", m_pElfSymbols[iLoop].info);
+				COutput::Printf(LEVEL_DEBUG, "Other %02X\n", m_pElfSymbols[iLoop].other);
+				COutput::Printf(LEVEL_DEBUG, "Shndx %04X\n\n", m_pElfSymbols[iLoop].shndx);
+				pSym++;
+			}
+		}
+		else
+		{
+			COutput::Printf(LEVEL_ERROR, "Could not allocate memory for symbols\n");
+			blRet = false;
 		}
 	}
 

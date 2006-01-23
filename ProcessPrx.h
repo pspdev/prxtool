@@ -44,6 +44,7 @@ public:
 
 	PspModule* GetModuleInfo();
 	ElfReloc* GetRelocs(int &iCount);
+	ElfSymbol* GetSymbols(int &iCount);
 	PspLibImport *GetImports();
 	PspLibExport *GetExports();
 	void SetNidMgr(CNidMgr* nidMgr);

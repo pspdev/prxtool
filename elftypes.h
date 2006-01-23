@@ -99,6 +99,17 @@ struct ElfReloc
 	u32 addr;
 };
 
+struct ElfSymbol
+{
+	const char *symname;
+	u32 name;
+	u32 value;
+	u32 size;
+	u32 info;
+	u32 other;
+	u32 shndx;
+};
+
 /* Define ELF types */
 typedef u32 Elf32_Addr; 
 typedef u16 Elf32_Half;
@@ -213,6 +224,18 @@ typedef struct {
 	Elf32_Addr r_offset; 
 	Elf32_Word r_info; 
 } Elf32_Rel;
+
+#define ELF32_ST_BIND(i) ((i)>>4)
+#define ELF32_ST_TYPE(i) ((i)&0xf)
+#define ELF32_ST_INFO(b,t) (((b)<<4)+((t)&0xf))
+
+#define STT_NOTYPE 0
+#define STT_OBJECT 1
+#define STT_FUNC 2
+#define STT_SECTION 3
+#define STT_FILE 4
+#define STT_LOPROC 13
+#define STT_HIPROC 15
 
 typedef struct { 
 	Elf32_Word st_name; 
