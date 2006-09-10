@@ -11,6 +11,7 @@
 #include <cassert>
 #include "SerializePrxToIdc.h"
 #include "SerializePrxToXml.h"
+#include "SerializePrxToMap.h"
 #include "ProcessPrx.h"
 #include "output.h"
 
@@ -18,15 +19,16 @@ enum OutputMode
 {
 	OUTPUT_NONE = 0,
 	OUTPUT_IDC = 1,
-	OUTPUT_XML = 2,
-	OUTPUT_ELF = 3,
-	OUTPUT_PRX = 4,
-	OUTPUT_STUB = 5,
-	OUTPUT_DEP = 6,
-	OUTPUT_MOD = 7,
-	OUTPUT_PSTUB = 8,
-	OUTPUT_IMPEXP = 9,
-	OUTPUT_SYMBOLS = 10,
+	OUTPUT_MAP = 2,
+	OUTPUT_XML = 3,
+	OUTPUT_ELF = 4,
+	OUTPUT_PRX = 5,
+	OUTPUT_STUB = 6,
+	OUTPUT_DEP = 7,
+	OUTPUT_MOD = 8,
+	OUTPUT_PSTUB = 9,
+	OUTPUT_IMPEXP = 10,
+	OUTPUT_SYMBOLS = 11,
 };
 
 static char **g_ppInfiles;
@@ -72,7 +74,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "fxckptuqemdyo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "fxcakptuqemdyo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -85,6 +87,8 @@ int process_args(int argc, char **argv)
 			case 'e' : g_outputMode = OUTPUT_ELF;
 					   break;
 			case 'c' : g_outputMode = OUTPUT_IDC;
+					   break;
+			case 'a' : g_outputMode = OUTPUT_MAP;
 					   break;
 			case 't' : g_outputMode = OUTPUT_STUB;
 					   break;
@@ -158,6 +162,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "Options:\n");
 	COutput::Printf(LEVEL_INFO, "-o outfile : Output file. If not specified uses stdout\n");
 	COutput::Printf(LEVEL_INFO, "-c         : Output an IDC file (default)\n");
+	COutput::Printf(LEVEL_INFO, "-a         : Output a MAP file\n");
 	COutput::Printf(LEVEL_INFO, "-x         : Output an XML file\n");
 	COutput::Printf(LEVEL_INFO, "-p         : Output a PRX/PFX (from an ELF)\n");
 	COutput::Printf(LEVEL_INFO, "-e         : Output an ELF (from a PRX)\n");
@@ -655,6 +660,7 @@ int main(int argc, char **argv)
 			switch(g_outputMode)
 			{
 				case OUTPUT_XML :
+				case OUTPUT_MAP :
 				case OUTPUT_IDC :
 					out_fp = fopen(g_pOutfile, "wt");
 					break;
@@ -674,6 +680,8 @@ int main(int argc, char **argv)
 		switch(g_outputMode)
 		{
 			case OUTPUT_XML : pSer = new CSerializePrxToXml(out_fp);
+							  break;
+			case OUTPUT_MAP : pSer = new CSerializePrxToMap(out_fp);
 							  break;
 			case OUTPUT_IDC : pSer = new CSerializePrxToIdc(out_fp);
 							  break;
