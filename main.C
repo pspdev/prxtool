@@ -415,7 +415,8 @@ void output_importexport(const char *file, CNidMgr *pNids)
 				COutput::Printf(LEVEL_INFO, "Functions:\n");
 				for(iLoop = 0; iLoop < pExport->f_count; iLoop++)
 				{
-					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pExport->funcs[iLoop].nid, pExport->funcs[iLoop].name);
+					COutput::Printf(LEVEL_INFO, "0x%08X [0x%08X] - %s\n", pExport->funcs[iLoop].nid, 
+							pExport->funcs[iLoop].addr, pExport->funcs[iLoop].name);
 				}
 			}
 
@@ -424,7 +425,8 @@ void output_importexport(const char *file, CNidMgr *pNids)
 				COutput::Printf(LEVEL_INFO, "Variables:\n");
 				for(iLoop = 0; iLoop < pExport->v_count; iLoop++)
 				{
-					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pExport->vars[iLoop].nid, pExport->vars[iLoop].name);
+					COutput::Printf(LEVEL_INFO, "0x%08X [0x%08X] - %s\n", pExport->vars[iLoop].nid, 
+							pExport->vars[iLoop].addr, pExport->vars[iLoop].name);
 				}
 			}
 
