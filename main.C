@@ -65,7 +65,7 @@ void init_args()
 	g_pNamefile = NULL;
 	g_blDebug = false;
 	g_outputMode = OUTPUT_IDC;
-	g_iSMask = SERIALIZE_ALL;
+	g_iSMask = SERIALIZE_ALL & ~SERIALIZE_SECTIONS;
 	g_newstubs = 0;
 }
 
@@ -446,7 +446,9 @@ void output_importexport(const char *file, CNidMgr *pNids)
 				COutput::Printf(LEVEL_INFO, "Functions:\n");
 				for(iLoop = 0; iLoop < pImport->f_count; iLoop++)
 				{
-					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pImport->funcs[iLoop].nid, pImport->funcs[iLoop].name);
+					COutput::Printf(LEVEL_INFO, "0x%08X [0x%08X] - %s\n", 
+							pImport->funcs[iLoop].nid, pImport->funcs[iLoop].addr, 
+							pImport->funcs[iLoop].name);
 				}
 			}
 
@@ -455,7 +457,9 @@ void output_importexport(const char *file, CNidMgr *pNids)
 				COutput::Printf(LEVEL_INFO, "Variables:\n");
 				for(iLoop = 0; iLoop < pImport->v_count; iLoop++)
 				{
-					COutput::Printf(LEVEL_INFO, "%08X - %s\n", pImport->vars[iLoop].nid, pImport->vars[iLoop].name);
+					COutput::Printf(LEVEL_INFO, "0x%08X [0x%08X] - %s\n", 
+							pImport->vars[iLoop].nid, pImport->vars[iLoop].addr, 
+							pImport->vars[iLoop].name);
 				}
 			}
 

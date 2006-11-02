@@ -94,6 +94,7 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 	int iLoop;
 	u32 nidAddr;
 	u32 funcAddr;
+	u32 varAddr;
 	PspLibImport *pLib = NULL;
 
 	SAFE_ALLOC(pLib, PspLibImport);
@@ -108,6 +109,7 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 			pLib->stub.counts = LW(pImport->counts);
 			pLib->stub.nids = LW(pImport->nids);
 			pLib->stub.funcs = LW(pImport->funcs);
+			pLib->stub.vars = LW(pImport->vars);
 
 			if(pLib->stub.name == 0)
 			{
@@ -132,26 +134,20 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 			COutput::Printf(LEVEL_DEBUG, "Flags %08X, counts %08X, nids %08X, funcs %08X\n", 
 					pLib->stub.flags, pLib->stub.counts, pLib->stub.nids, pLib->stub.funcs);
 
-			/* No idea how to resolve variable at this moment, it might just throw in a ptr */
 			pLib->v_count = (pLib->stub.counts >> 8) & 0xFF;
-			if(pLib->v_count > 0)
-			{
-				COutput::Printf(LEVEL_WARNING, "Import variable count for '%s' is not 0\n", pLib->name);
-			}
-
-			pLib->v_count = 0;
 			pLib->f_count = (pLib->stub.counts >> 16) & 0xFFFF;
 			count = pLib->stub.counts & 0xFF;
 			nidAddr = pLib->stub.nids;
 			funcAddr = pLib->stub.funcs;
+			varAddr = pLib->stub.vars;
 
-			if(m_vMem.GetSize(nidAddr) < (sizeof(u32) * pLib->v_count))
+			if(m_vMem.GetSize(nidAddr) < (sizeof(u32) * pLib->f_count))
 			{
 				COutput::Puts(LEVEL_ERROR, "Not enough space for library import nids");
 				break;
 			}
 
-			if(m_vMem.GetSize(funcAddr) < (u32) (8 * pLib->v_count))
+			if(m_vMem.GetSize(funcAddr) < (u32) (8 * pLib->f_count))
 			{
 				COutput::Puts(LEVEL_ERROR, "Not enough space for library functions");
 				break;
@@ -168,6 +164,28 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 								pLib->funcs[iLoop].nid, pLib->funcs[iLoop].addr, pLib->funcs[iLoop].name);
 				nidAddr += 4;
 				funcAddr += 8;
+			}
+
+			for(iLoop = 0; iLoop < pLib->v_count; iLoop++)
+			{
+				u32 varFixup;
+				u32 varData;
+
+				pLib->vars[iLoop].addr = m_vMem.GetU32(varAddr);
+				pLib->vars[iLoop].nid = m_vMem.GetU32(varAddr+4);
+				pLib->vars[iLoop].type = PSP_ENTRY_VAR;
+				pLib->vars[iLoop].nid_addr = varAddr+4;
+				strcpy(pLib->vars[iLoop].name, m_pCurrNidMgr->FindLibName(pLib->name, pLib->vars[iLoop].nid));
+				COutput::Printf(LEVEL_DEBUG, "Found variable nid:0x%08X addr:0x%08X name:%s\n",
+						pLib->vars[iLoop].nid, pLib->vars[iLoop].addr, pLib->vars[iLoop].name);
+				varFixup = pLib->vars[iLoop].addr;
+				while(varData = m_vMem.GetU32(varFixup))
+				{
+					COutput::Printf(LEVEL_DEBUG, "Variable Fixup: addr:%08X type:%08X\n", 
+							(varData & 0x3FFFFFF) << 2, varData >> 26);
+					varFixup += 4;
+				}
+				varAddr += 8;
 			}
 
 			if(m_modInfo.imp_head == NULL)
@@ -644,6 +662,7 @@ bool CProcessPrx::PrxToElf(FILE *fp)
 		u32 iVal;
 		u32 *pData;
 		u32 *pData_HiAddr;
+		bool blHiSet = false;
 		/* Pointer to the base address for read/writing */
 		u8  *pBase;
 		u32 iBaseSize;
@@ -676,6 +695,7 @@ bool CProcessPrx::PrxToElf(FILE *fp)
 				switch(m_pElfRelocs[iLoop].type)
 				{
 					case R_MIPS_HI16 : pData_HiAddr = (u32*) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
+									   blHiSet = false;
 									   COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", 
 											   iLoop, m_pElfRelocs[iLoop].offset);
 									break;
@@ -714,9 +734,10 @@ bool CProcessPrx::PrxToElf(FILE *fp)
 											addr += pDataSect->iAddr;
 											COutput::Printf(LEVEL_DEBUG, "%d: Address %08X\n", iLoop, addr);
 
-											if((addr & 0x8000) && (!ori))
+											if((addr & 0x8000) && (!blHiSet) && (!ori))
 											{
 												addr += 0x10000;
+												blHiSet = true;
 											}
 
 											loinst &= ~0xFFFF;

@@ -286,7 +286,6 @@ bool CProcessElf::LoadPrograms()
 				m_pElfPrograms[iLoop].iMemsz = LW(pHeader->p_memsz);
 				m_pElfPrograms[iLoop].iFlags = LW(pHeader->p_flags);
 				m_pElfPrograms[iLoop].iAlign = LW(pHeader->p_align);
-				// Setup pData ? 
 
 				pData += m_elfHeader.iPhentsize;
 			}
