@@ -48,6 +48,7 @@ public:
 	PspLibImport *GetImports();
 	PspLibExport *GetExports();
 	void SetNidMgr(CNidMgr* nidMgr);
+	void Disasm(bool blAll, FILE *fp);
 };
 
 #endif

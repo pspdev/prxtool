@@ -11,6 +11,7 @@
 #include "ProcessPrx.h"
 #include "VirtualMem.h"
 #include "output.h"
+#include "disasm.h"
 
 static const char* g_szRelTypes[13] = 
 {
@@ -897,4 +898,28 @@ ElfSymbol* CProcessPrx::GetSymbols(int &iCount)
 {
 	iCount = m_iSymCount;
 	return m_pElfSymbols;
+}
+
+void CProcessPrx::Disasm(bool blAll, FILE *fp)
+{
+	int iLoop;
+
+	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+	{
+		if((m_pElfSections[iLoop].iFlags & SHF_EXECINSTR) || (blAll))
+		{
+			int iILoop;
+			u32 dwAddr;
+			u32 *pInst;
+			dwAddr = m_pElfSections[iLoop].iAddr;
+			pInst  = (u32*) m_pElfSections[iLoop].pData;
+
+			fprintf(fp, "<Section: %s>\n", m_pElfSections[iLoop].szName);
+			for(iILoop = 0; iILoop < (m_pElfSections[iLoop].iSize / 4); iILoop++)
+			{
+				fprintf(fp, "%-40s\n", disasmInstruction(LW(pInst[iILoop]), dwAddr, NULL, NULL));
+				dwAddr += 4;
+			}
+		}
+	}
 }

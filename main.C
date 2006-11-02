@@ -29,6 +29,7 @@ enum OutputMode
 	OUTPUT_PSTUB = 9,
 	OUTPUT_IMPEXP = 10,
 	OUTPUT_SYMBOLS = 11,
+	OUTPUT_DISASM  = 12,
 };
 
 static char **g_ppInfiles;
@@ -74,7 +75,7 @@ int process_args(int argc, char **argv)
 	int ch;
 	init_args();
 
-	while((ch = getopt(argc, argv, "fxcakptuqemdyo:s:n:")) != -1)
+	while((ch = getopt(argc, argv, "fxcakptuqemdywo:s:n:")) != -1)
 	{
 		switch(ch)
 		{
@@ -95,6 +96,8 @@ int process_args(int argc, char **argv)
 			case 'q' : g_outputMode = OUTPUT_DEP;
 					   break;
 			case 'u' : g_outputMode = OUTPUT_PSTUB;
+					   break;
+			case 'w' : g_outputMode = OUTPUT_DISASM;
 					   break;
 			case 'o' : g_pOutfile = optarg;
 					   break;
@@ -175,6 +178,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
 	COutput::Printf(LEVEL_INFO, "-m         : Print the module and library information to screen\n");
 	COutput::Printf(LEVEL_INFO, "-f         : Print the imports and exports of a prx\n");
+	COutput::Printf(LEVEL_INFO, "-w         : Disasm the executable sections of the file\n");
 	COutput::Printf(LEVEL_INFO, "-y         : Output special symbols file\n");
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Example 1: prxtool -o output.idc -s xr myfile.prx\n");
@@ -308,6 +312,21 @@ void output_symbols(const char *file, FILE *out_fp)
 		{
 			COutput::Puts(LEVEL_ERROR, "No symbols available");
 		}
+	}
+}
+
+void output_disasm(const char *file, FILE *out_fp)
+{
+	CProcessPrx prx;
+
+	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures");
+	}
+	else
+	{
+		prx.Disasm(false, out_fp);
 	}
 }
 
@@ -665,15 +684,12 @@ int main(int argc, char **argv)
 		{
 			switch(g_outputMode)
 			{
-				case OUTPUT_XML :
-				case OUTPUT_MAP :
-				case OUTPUT_IDC :
-					out_fp = fopen(g_pOutfile, "wt");
-					break;
 				case OUTPUT_ELF :
 				case OUTPUT_PRX :
-				default:
 					out_fp = fopen(g_pOutfile, "wb");
+					break;
+				default:
+					out_fp = fopen(g_pOutfile, "wt");
 					break;
 			}
 			if(out_fp == NULL)
@@ -756,6 +772,10 @@ int main(int argc, char **argv)
 		else if(g_outputMode == OUTPUT_SYMBOLS)
 		{
 			output_symbols(g_ppInfiles[0], out_fp);
+		}
+		else if(g_outputMode == OUTPUT_DISASM)
+		{
+			output_disasm(g_ppInfiles[0], out_fp);
 		}
 		else
 		{
