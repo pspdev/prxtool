@@ -39,6 +39,9 @@ struct PspModuleExport
 	u32 exports;
 };
 
+/* Base size of an import structure */
+#define PSP_IMPORT_BASE_SIZE (5*4)
+
 /* Structure to hold the module import information */
 struct PspModuleImport
 {

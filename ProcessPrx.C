@@ -246,7 +246,7 @@ bool CProcessPrx::LoadImports()
 
 	if(imp_base != 0)
 	{
-		while((imp_end - imp_base) >= sizeof(PspModuleImport))
+		while((imp_end - imp_base) >= PSP_IMPORT_BASE_SIZE)
 		{
 			u32 count;
 			PspModuleImport *pImport;
