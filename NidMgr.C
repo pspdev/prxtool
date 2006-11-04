@@ -10,6 +10,23 @@
 #include <tinyxml/tinyxml.h>
 #include "output.h"
 #include "NidMgr.h"
+#include "prxtypes.h"
+
+struct SyslibEntry
+{
+	unsigned int nid;
+	const char *name;
+};
+
+static SyslibEntry g_syslib[] = {
+	{ 0xd3744be0, "module_bootstart" },
+    { 0xf01d73a7, "module_info" },
+	{ 0x2f064fa6, "module_reboot_before" },
+	{ 0xd632acdb, "module_start" },
+	{ 0x0f7c276c, "module_start_thread_parameter" },
+	{ 0xcee8593c, "module_stop" },
+	{ 0xcf0cc697, "module_stop_thread_parameter" },
+};
 
 /* Default constructor */
 CNidMgr::CNidMgr()
@@ -53,7 +70,7 @@ const char *CNidMgr::GenName(const char *lib, u32 nid)
 {
 	if(lib == NULL)
 	{
-		snprintf(m_szCurrName, LIB_SYMBOL_NAME_MAX, "sys_%08X", nid);
+		snprintf(m_szCurrName, LIB_SYMBOL_NAME_MAX, "syslib_%08X", nid);
 	}
 	else
 	{
@@ -99,8 +116,28 @@ const char *CNidMgr::SearchLibs(const char *lib, u32 nid)
 
 	if(pName == NULL)
 	{
-		COutput::Puts(LEVEL_DEBUG, "Using default name");
-		pName = GenName(lib, nid);
+		/* First check special case system library stuff */
+		if(strcmp(lib, PSP_SYSTEM_EXPORT) == 0)
+		{
+			int size;
+			int i;
+
+			size = sizeof(g_syslib) / sizeof(SyslibEntry);
+			for(i = 0; i < size; i++)
+			{
+				if(nid == g_syslib[i].nid)
+				{
+					pName = g_syslib[i].name;
+					break;
+				}
+			}
+		}
+
+		if(pName == NULL)
+		{
+			COutput::Puts(LEVEL_DEBUG, "Using default name");
+			pName = GenName(lib, nid);
+		}
 	}
 
 	return pName;

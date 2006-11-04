@@ -65,6 +65,10 @@ public:
 	virtual bool LoadFromFile(const char *szFilename);
 	/** Find an elf section based on its name */
 	ElfSection *ElfFindSection(const char* szName);
+	/** Find an elf section based on its address */
+	ElfSection *ElfFindSectionByAddr(unsigned int dwAddr);
+	/** Determine if a section is a data section */
+	bool ElfAddrIsText(unsigned int dwAddr);
 	/** Get the base address of the ELF */
 	u32 ElfGetBaseAddr();
 	/** Get the top address of the ELF */

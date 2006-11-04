@@ -482,13 +482,6 @@ bool CProcessPrx::FillModule(ElfSection *pInfoSect)
 	return blRet;
 }
 
-void CProcessPrx::FixupNames()
-{
-	if(m_blPrxLoaded)
-	{
-	}
-}
-
 bool CProcessPrx::LoadRelocs()
 {
 	bool blRet = false;
@@ -900,26 +893,619 @@ ElfSymbol* CProcessPrx::GetSymbols(int &iCount)
 	return m_pElfSymbols;
 }
 
-void CProcessPrx::Disasm(bool blAll, FILE *fp)
+void CProcessPrx::BuildSymbols(SymbolMap &syms, u32 dwBase)
 {
+	/* First map in imports and exports */
+	PspLibExport *pExport;
+	PspLibImport *pImport;
 	int iLoop;
 
+	pExport = m_modInfo.exp_head;
+	pImport = m_modInfo.imp_head;
+
+	while(pExport != NULL)
+	{
+		if(pExport->f_count > 0)
+		{
+			for(iLoop = 0; iLoop < pExport->f_count; iLoop++)
+			{
+				SymbolEntry *s;
+
+				s = syms[pExport->funcs[iLoop].addr + dwBase];
+				if(s)
+				{
+					s->alias.insert(s->alias.end(), pExport->funcs[iLoop].name);
+				}
+				else
+				{
+					s = new SymbolEntry;
+					s->addr = pExport->funcs[iLoop].addr + dwBase;
+					s->type = SYMBOL_FUNC;
+					s->size = 0;
+					s->name = pExport->funcs[iLoop].name;
+					syms[pExport->funcs[iLoop].addr + dwBase] = s;
+				}
+			}
+		}
+
+		if(pExport->v_count > 0)
+		{
+			for(iLoop = 0; iLoop < pExport->v_count; iLoop++)
+			{
+				SymbolEntry *s;
+
+				s = syms[pExport->vars[iLoop].addr + dwBase];
+				if(s)
+				{
+					s->alias.insert(s->alias.end(), pExport->vars[iLoop].name);
+				}
+				else
+				{
+					s = new SymbolEntry;
+					s->addr = pExport->vars[iLoop].addr + dwBase;
+					s->type = SYMBOL_DATA;
+					s->size = 0;
+					s->name = pExport->vars[iLoop].name;
+					syms[pExport->vars[iLoop].addr + dwBase] = s;
+				}
+			}
+		}
+
+		pExport = pExport->next;
+	}
+
+	while(pImport != NULL)
+	{
+		if(pImport->f_count > 0)
+		{
+			for(iLoop = 0; iLoop < pImport->f_count; iLoop++)
+			{
+				SymbolEntry *s = new SymbolEntry;
+				s->addr = pImport->funcs[iLoop].addr + dwBase;
+				s->type = SYMBOL_FUNC;
+				s->size = 0;
+				s->name = pImport->funcs[iLoop].name;
+				syms[pImport->funcs[iLoop].addr + dwBase] = s;
+			}
+		}
+
+		if(pImport->v_count > 0)
+		{
+			for(iLoop = 0; iLoop < pImport->v_count; iLoop++)
+			{
+				SymbolEntry *s = new SymbolEntry;
+				s->addr = pImport->vars[iLoop].addr + dwBase;
+				s->type = SYMBOL_DATA;
+				s->size = 0;
+				s->name = pImport->vars[iLoop].name;
+				syms[pImport->vars[iLoop].addr + dwBase] = s;
+			}
+		}
+
+		pImport = pImport->next;
+	}
+}
+
+void CProcessPrx::FreeSymbols(SymbolMap &syms)
+{
+	SymbolMap::iterator start = syms.begin();
+	SymbolMap::iterator end = syms.end();
+
+	while(start != end)
+	{
+		SymbolEntry *p;
+		p = syms[(*start).first];
+		if(p)
+		{
+			delete p;
+			syms[(*start).first] = NULL;
+		}
+		++start;
+	}
+}
+
+void CProcessPrx::FreeImms(ImmMap &imms)
+{
+	ImmMap::iterator start = imms.begin();
+	ImmMap::iterator end = imms.end();
+
+	while(start != end)
+	{
+		ImmEntry *i;
+
+		i = imms[(*start).first];
+		if(i)
+		{
+			delete i;
+			imms[(*start).first] = NULL;
+		}
+		++start;
+	}
+}
+
+void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
+{
+	struct RegEntry
+	{
+		unsigned int base;
+		bool set;
+		u32 *inst;
+	};
+
+	ElfSection* pModInfoSect;
+	int iLoop;
+	u32 iVal;
+	u32 *pData;
+	RegEntry regs[32];
+
+	memset(regs, 0, sizeof(regs));
+	/* Fixup the elf file and output it to fp */
+	if((m_blPrxLoaded == false))
+	{
+		return;
+	}
+
+	if((m_elfHeader.iPhnum < 1) || (m_elfHeader.iPhentsize == 0) || (m_elfHeader.iPhoff == 0))
+	{
+		return;
+	}
+
+	/* We dont support ELF relocs as they are not very special */
+	if(m_elfHeader.iType != ELF_PRX_TYPE)
+	{
+		return;
+	}
+
+	pData = NULL;
+	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
+	{
+		ElfReloc *rel = &m_pElfRelocs[iLoop];
+		u32 dwRealOfs;
+		u32 dwCurrBase;
+		int iOfsPH;
+		int iValPH;
+
+		iOfsPH = rel->symbol & 0xFF;
+		iValPH = (rel->symbol >> 8) & 0xFF;
+		if((iOfsPH >= m_iPHCount) || (iValPH >= m_iPHCount))
+		{
+			COutput::Printf(LEVEL_DEBUG, "Invalid relocation PH sets (%d, %d)\n", iOfsPH, iValPH);
+			continue;
+		}
+		dwRealOfs = rel->offset + m_pElfPrograms[iOfsPH].iVaddr;
+		dwCurrBase = dwBase + m_pElfPrograms[iValPH].iVaddr;
+		pData = (u32*) m_vMem.GetPtr(dwRealOfs);
+		if(pData == NULL)
+		{
+			COutput::Printf(LEVEL_DEBUG, "Invalid offset for relocation (%08X)\n", dwRealOfs);
+			continue;
+		}
+
+		switch(m_pElfRelocs[iLoop].type)
+		{
+			case R_MIPS_HI16: {
+								  int reg;
+								  int inst;
+								  inst = LW(*pData);
+								  /* If not a lui instruction I don't know what it is */
+								  if((inst >> 26) == 0xF)
+								  {
+									  reg = (inst >> 16) & 0x1F;
+									  regs[reg].base = ((inst & 0xFFFF) << 16) + dwCurrBase;
+									  regs[reg].set = 0;
+									  regs[reg].inst = pData;
+								  }
+								  else
+								  {
+									  COutput::Printf(LEVEL_DEBUG, "Invalid hi relocation instruction %08X\n", inst);
+								  }
+							  }
+							  break;
+			case R_MIPS_LO16: {
+								  u32 hiinst;
+								  u32 loinst;
+								  u32 addr;
+								  int ori = 0;
+								  int reg;
+								  ImmEntry *imm;
+
+								  loinst = LW(*pData);
+								  reg = (loinst >> 21) & 0x1F;
+								  if(regs[reg].inst == NULL)
+								  {
+									  COutput::Printf(LEVEL_DEBUG, "Invalid lo relocation, no matching hi 0x%08X\n", dwRealOfs);
+									  break;
+								  }
+
+								  hiinst = LW(*regs[reg].inst);
+
+								  addr = regs[reg].base;
+								  /* ori */
+								  if((loinst >> 26) == 0xD)
+								  {
+									  addr = addr | (loinst & 0xFFFF);
+									  ori = 1;
+								  }
+								  else
+								  {
+									  addr = (s32) addr + (s16) (loinst & 0xFFFF);
+								  }
+
+								  imm = new ImmEntry;
+								  imm->addr = dwRealOfs + dwBase;
+								  imm->target = addr;
+								  imm->text = ElfAddrIsText(addr - dwBase);
+								  imms[dwRealOfs + dwBase] = imm;
+
+								  if((addr & 0x8000) && (!regs[reg].set) && (!ori))
+								  {
+									  addr += 0x10000;
+								  }
+
+								  loinst &= ~0xFFFF;
+								  loinst |= (addr & 0xFFFF);
+								  if(!regs[reg].set)
+								  {
+									  hiinst &= ~0xFFFF;
+									  hiinst |= ((addr >> 16) & 0xFFFF);
+									  regs[reg].base = addr & 0xFFFF0000;
+									  regs[reg].set = 1;
+									  SW(*regs[reg].inst, hiinst);
+									  regs[reg].set = true;
+								  }
+
+								  SW(*pData, loinst);
+							  }
+							  break;
+			case R_MIPS_26:   {
+								  u32 dwAddr;
+								  u32 dwInst;
+
+								  dwInst = LW(*pData);
+								  dwAddr = (dwInst & 0x03FFFFFF) << 2;
+								  dwAddr += dwCurrBase;
+								  dwInst &= ~0x03FFFFFF;
+								  dwAddr = (dwAddr >> 2) & 0x03FFFFFF;
+								  dwInst |= dwAddr;
+								  SW(*pData, dwInst);
+							  }
+							  break;
+			case R_MIPS_32:   {
+								  u32 dwData;
+
+								  dwData = LW(*pData);
+								  dwData += dwCurrBase;
+								  SW(*pData, dwData);
+							  }
+							  break;
+			default: /* Do nothing */
+							  break;
+		};
+	}
+}
+
+/* Print a row of a memory dump, up to row_size */
+static void print_row(FILE *fp, const u32* row, s32 row_size, u32 addr)
+{
+	char buffer[128];
+	char *p = buffer;
+	int i = 0;
+
+	sprintf(p, "0x%08X - ", addr);
+	p += strlen(p);
+
+	for(i = 0; i < 16; i++)
+	{
+		if(i < row_size)
+		{
+			sprintf(p, "%02X ", row[i]);
+		}
+		else
+		{
+			sprintf(p, "-- ");
+		}
+
+		p += strlen(p);
+
+		if((i < 15) && ((i & 3) == 3))
+		{
+			*p++ = '|';
+			*p++ = ' ';
+		}
+	}
+
+	sprintf(p, "- ");
+	p += strlen(p);
+
+	for(i = 0; i < 16; i++)
+	{
+		if(i < row_size)
+		{
+			if((row[i] >= 32) && (row[i] < 127))
+			{
+				*p++ = row[i];
+			}
+			else
+			{
+				*p++ =  '.';
+			}
+		}
+		else
+		{
+			*p++ = '.';
+		}
+	}
+	*p = 0;
+
+	fprintf(fp, "%s\n", buffer);
+}
+
+void CProcessPrx::DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData)
+{
+	int i;
+	u32 row[16];
+	int row_size;
+
+	fprintf(fp, "           - 00 01 02 03 | 04 05 06 07 | 08 09 0A 0B | 0C 0D 0E 0F - 0123456789ABCDEF\n");
+	fprintf(fp, "-------------------------------------------------------------------------------------\n");
+	memset(row, 0, sizeof(row));
+	row_size = 0;
+	for(i = 0; i < iSize; i++)
+	{
+		row[row_size] = pData[i];
+		row_size++;
+		if(row_size == 16)
+		{
+			print_row(fp, row, row_size, dwAddr);
+			dwAddr += 16;
+			row_size = 0;
+			memset(row, 0, sizeof(row));
+		}
+	}
+	if(row_size > 0)
+	{
+		print_row(fp, row, row_size, dwAddr);
+	}
+}
+
+#define ISSPACE(x) ((x) == '\t' || (x) == '\r' || (x) == '\n' || (x) == '\v' || (x) == '\f')
+
+void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData)
+{
+	int i;
+	std::string curr = "";
+	int iPrintHead = 0;
+
+	for(i = 0; i < iSize; i++)
+	{
+		if(pData[i] > 0)
+		{
+			if((pData[i] >= 32) && (pData[i] < 127))
+			{
+				curr += pData[i];
+			}
+			else if(ISSPACE(pData[i]))
+			{
+				switch(pData[i])
+				{
+					case '\t': curr += "\\t";
+							   break;
+					case '\r': curr += "\\r";
+									   break;
+					case '\n': curr += "\\n";
+							   break;
+					case '\v': curr += "\\v";
+							   break;
+					case '\f': curr += "\\f";
+							   break;
+					default: break;
+					};
+			}
+		}
+		else
+		{
+			if(!curr.empty())
+			{
+				if(curr.length() > 3)
+				{
+					if(iPrintHead == 0)
+					{
+						fprintf(fp, "\n; ASCII Strings\n");
+						iPrintHead = 1;
+					}
+					fprintf(fp, "0x%08X: %s\n", dwAddr, curr.c_str());
+				}
+				curr.clear();
+			}
+		}
+		dwAddr++;
+	}
+}
+
+void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms)
+{
+	int iILoop;
+	u32 *pInst;
+	pInst  = (u32*) pData;
+
+	for(iILoop = 0; iILoop < (iSize / 4); iILoop++)
+	{
+		SymbolEntry *s;
+		ImmEntry *imm;
+
+		s = disasmFindSymbol(dwAddr);
+		if(s)
+		{
+			switch(s->type)
+			{
+				case SYMBOL_FUNC: fprintf(fp, "\n; ======================================================\n");
+						    	  fprintf(fp, "; Subroutine %s - Address 0x%08X ", s->name.c_str(), dwAddr);
+								  if(s->alias.size() > 0)
+								  {
+									  fprintf(fp, "- Aliases: ", s->alias.size());
+									  int i;
+									  for(i = 0; i < s->alias.size()-1; i++)
+									  {
+										  fprintf(fp, "%s, ", s->alias[i].c_str());
+									  }
+									 fprintf(fp, "%s", s->alias[i].c_str());
+								  }
+								  fprintf(fp, "\n");
+								  fprintf(fp, "%s:", s->name.c_str());
+								  break;
+				case SYMBOL_LOCAL: fprintf(fp, "\n");
+								   fprintf(fp, "%s:", s->name.c_str());
+								   break;
+				default: /* Do nothing atm */
+								   break;
+			};
+
+			if(s->refs.size() > 0)
+			{
+				int i;
+				fprintf(fp, "\t\t; Refs: ");
+				for(i = 0; i < s->refs.size(); i++)
+				{
+					fprintf(fp, "0x%08X ", s->refs[i]);
+				}
+			}
+			fprintf(fp, "\n");
+		}
+
+		imm = imms[dwAddr];
+		if(imm)
+		{
+			SymbolEntry *sym = disasmFindSymbol(imm->target);
+			if(sym)
+			{
+				fprintf(fp, "; Data ref %s/%08X", sym->name.c_str(), imm->target);
+			}
+			else
+			{
+				fprintf(fp, "; Data ref 0x%08X", imm->target);
+			}
+			fprintf(fp, "\n");
+		}
+
+		fprintf(fp, "\t%-40s\n", disasmInstruction(LW(pInst[iILoop]), dwAddr, NULL, NULL));
+		dwAddr += 4;
+	}
+}
+
+void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
+{
+	int iLoop;
+	SymbolMap syms;
+	ImmMap imms;
+
+	if(m_pElfRelocs)
+	{
+		FixupRelocs(dwBase, imms);
+	}
+	else
+	{
+		/* If no relocs assume it isn't relocatable :P */
+		dwBase = 0;
+	}
+	BuildSymbols(syms, dwBase);
+
+	ImmMap::iterator start = imms.begin();
+	ImmMap::iterator end = imms.end();
+
+	while(start != end)
+	{
+		ImmEntry *imm;
+		u32 inst;
+
+		imm = imms[(*start).first];
+		inst = m_vMem.GetU32(imm->target - dwBase);
+		if(imm->text)
+		{
+			SymbolEntry *s;
+
+			s = syms[imm->target];
+			if(s == NULL)
+			{
+				s = new SymbolEntry;
+				char name[128];
+				/* Hopefully most functions will start with a SP assignment */
+				if((inst >> 16) == 0x27BD)
+				{
+					snprintf(name, sizeof(name), "sub_%08X", imm->target);
+					s->type = SYMBOL_FUNC;
+				}
+				else
+				{
+					snprintf(name, sizeof(name), "loc_%08X", imm->target);
+					s->type = SYMBOL_LOCAL;
+				}
+				s->addr = imm->target;
+				s->size = 0;
+				s->refs.insert(s->refs.end(), imm->addr);
+				s->name = name;
+				syms[imm->target] = s;
+			}
+			else
+			{
+				s->refs.insert(s->refs.end(), imm->addr);
+			}
+		}
+
+		start++;
+	}
+
+	/* Build symbols for branches in the code */
 	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 	{
-		if((m_pElfSections[iLoop].iFlags & SHF_EXECINSTR) || (blAll))
+		if(m_pElfSections[iLoop].iFlags & SHF_EXECINSTR)
 		{
 			int iILoop;
 			u32 dwAddr;
 			u32 *pInst;
 			dwAddr = m_pElfSections[iLoop].iAddr;
-			pInst  = (u32*) m_pElfSections[iLoop].pData;
+			pInst  = (u32*) m_vMem.GetPtr(dwAddr);
 
-			fprintf(fp, "<Section: %s>\n", m_pElfSections[iLoop].szName);
 			for(iILoop = 0; iILoop < (m_pElfSections[iLoop].iSize / 4); iILoop++)
 			{
-				fprintf(fp, "%-40s\n", disasmInstruction(LW(pInst[iILoop]), dwAddr, NULL, NULL));
+				disasmAddBranchSymbols(LW(pInst[iILoop]), dwAddr + dwBase, syms);
 				dwAddr += 4;
 			}
 		}
 	}
+
+	disasmSetSymbols(&syms);
+	disasmSetOpts(disopts, 1);
+
+	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+	{
+		if((m_pElfSections[iLoop].iFlags & (SHF_EXECINSTR | SHF_ALLOC)) || (blAll))
+		{
+			if(((m_pElfSections[iLoop].iSize > 0) && (m_pElfSections[iLoop].iType == SHT_PROGBITS)) || blAll)
+			{
+				fprintf(fp, "\n; ==== Section %s - Address 0x%08X Size 0x%08X Flags 0x%04X\n", 
+						m_pElfSections[iLoop].szName, m_pElfSections[iLoop].iAddr + dwBase, 
+						m_pElfSections[iLoop].iSize, m_pElfSections[iLoop].iFlags);
+				if(m_pElfSections[iLoop].iFlags & SHF_EXECINSTR)
+				{
+					Disasm(fp, m_pElfSections[iLoop].iAddr + dwBase, 
+							m_pElfSections[iLoop].iSize, 
+							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr),
+							imms);
+				}
+				else
+				{
+					DumpData(fp, m_pElfSections[iLoop].iAddr + dwBase, 
+							m_pElfSections[iLoop].iSize,
+							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr));
+					DumpStrings(fp, m_pElfSections[iLoop].iAddr + dwBase, 
+							m_pElfSections[iLoop].iSize, 
+							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr));
+				}
+			}
+		}
+	}
+
+	disasmSetSymbols(NULL);
+	FreeSymbols(syms);
+	FreeImms(imms);
 }

@@ -12,6 +12,7 @@
 #include "VirtualMem.h"
 #include "prxtypes.h"
 #include "NidMgr.h"
+#include "disasm.h"
 
 /* Define ProcessPrx derived from ProcessElf */
 class CProcessPrx : public CProcessElf
@@ -33,11 +34,17 @@ class CProcessPrx : public CProcessElf
 	int  LoadSingleExport(PspModuleExport *pExport, u32 addr);
 	bool LoadExports();
 	bool LoadRelocs();
+	void BuildSymbols(SymbolMap &syms, u32 dwBase);
+	void FreeSymbols(SymbolMap &syms);
+	void FreeImms(ImmMap &imms);
+	void FixupRelocs(u32 dwBase, ImmMap &imms);
+	void DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
+	void DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
+	void Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms);
 public:
 	CProcessPrx();
 	virtual ~CProcessPrx();
 	virtual bool LoadFromFile(const char *szFilename);
-	void FixupNames();
 
 	bool PrxToElf(FILE *fp);
 	bool ElfToPrx(FILE *fp);
@@ -48,7 +55,7 @@ public:
 	PspLibImport *GetImports();
 	PspLibExport *GetExports();
 	void SetNidMgr(CNidMgr* nidMgr);
-	void Disasm(bool blAll, FILE *fp);
+	void Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase);
 };
 
 #endif

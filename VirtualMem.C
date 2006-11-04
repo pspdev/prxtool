@@ -56,7 +56,7 @@ u8 CVirtualMem::GetU8(u32 iAddr)
 		return m_pData[iAddr - m_iBaseAddr];
 	}
 
-	COutput::Printf(LEVEL_ERROR, "Invalid memory address 0x%08X\n", iAddr);
+	COutput::Printf(LEVEL_DEBUG, "Invalid memory address 0x%08X\n", iAddr);
 	return 0;
 }
 
@@ -74,12 +74,12 @@ u16   CVirtualMem::GetU16(u32 iAddr)
 		}
 		else
 		{
-			COutput::Printf(LEVEL_ERROR, "Invalid endian format\n");
+			COutput::Printf(LEVEL_DEBUG, "Invalid endian format\n");
 		}
 	}
 	else
 	{
-		COutput::Printf(LEVEL_ERROR, "Invalid memory address 0x%08X\n", iAddr);
+		COutput::Printf(LEVEL_DEBUG, "Invalid memory address 0x%08X\n", iAddr);
 	}
 
 	return 0;
@@ -99,12 +99,12 @@ u32   CVirtualMem::GetU32(u32 iAddr)
 		}
 		else
 		{
-			COutput::Printf(LEVEL_ERROR, "Invalid endian format\n");
+			COutput::Printf(LEVEL_DEBUG, "Invalid endian format\n");
 		}
 	}
 	else
 	{
-		COutput::Printf(LEVEL_ERROR, "Invalid memory address 0x%08X\n", iAddr);
+		COutput::Printf(LEVEL_DEBUG, "Invalid memory address 0x%08X\n", iAddr);
 	}
 
 	return 0;
@@ -117,7 +117,7 @@ s8    CVirtualMem::GetS8(u32 iAddr)
 		return m_pData[iAddr - m_iBaseAddr];
 	}
 
-	COutput::Printf(LEVEL_ERROR, "Invalid memory address 0x%08X\n", iAddr);
+	COutput::Printf(LEVEL_DEBUG, "Invalid memory address 0x%08X\n", iAddr);
 
 	return 0;
 }
@@ -136,12 +136,12 @@ s16   CVirtualMem::GetS16(u32 iAddr)
 		}
 		else
 		{
-			COutput::Printf(LEVEL_ERROR, "Invalid endian format\n");
+			COutput::Printf(LEVEL_DEBUG, "Invalid endian format\n");
 		}
 	}
 	else
 	{
-		COutput::Printf(LEVEL_ERROR, "Invalid memory address 0x%08X\n", iAddr);
+		COutput::Printf(LEVEL_DEBUG, "Invalid memory address 0x%08X\n", iAddr);
 	}
 
 
@@ -162,12 +162,12 @@ s32   CVirtualMem::GetS32(u32 iAddr)
 		}
 		else
 		{
-			COutput::Printf(LEVEL_ERROR, "Invalid endian format\n");
+			COutput::Printf(LEVEL_DEBUG, "Invalid endian format\n");
 		}
 	}
 	else
 	{
-		COutput::Printf(LEVEL_ERROR, "Invalid memory address 0x%08X\n", iAddr);
+		COutput::Printf(LEVEL_DEBUG, "Invalid memory address 0x%08X\n", iAddr);
 	}
 
 	return 0;
@@ -181,7 +181,7 @@ void *CVirtualMem::GetPtr(u32 iAddr)
 	}
 	else
 	{
-		COutput::Printf(LEVEL_ERROR, "Ptr out of region 0x%08X\n", iAddr);
+		COutput::Printf(LEVEL_DEBUG, "Ptr out of region 0x%08X\n", iAddr);
 	}
 
 	return NULL;

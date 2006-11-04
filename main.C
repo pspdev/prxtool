@@ -9,11 +9,14 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <cassert>
+#include <getopt.h>
 #include "SerializePrxToIdc.h"
 #include "SerializePrxToXml.h"
 #include "SerializePrxToMap.h"
 #include "ProcessPrx.h"
 #include "output.h"
+
+#define PRXTOOL_VERSION "1.0"
 
 enum OutputMode
 {
@@ -40,6 +43,31 @@ static bool g_blDebug;
 static OutputMode g_outputMode;
 static u32 g_iSMask;
 static int g_newstubs;
+static u32 g_dwBase;
+static const char *g_disopts = "";
+
+static struct option cmd_options[] = {
+	{"output", required_argument, 0, 'o'},
+	{"idcout", no_argument, 0, 'c'},
+	{"mapout", no_argument, 0, 'a'},
+	{"xmlout", no_argument, 0, 'x'},
+	{"prxout", no_argument, 0, 'p'},
+	{"elfout", no_argument, 0, 'e'},
+	{"debug", no_argument, 0, 'd'},
+	{"serial", required_argument, 0, 's'},
+	{"xmlfile", required_argument, 0, 'n'},
+	{"stubs", no_argument, 0, 't'},
+	{"prxstubs", no_argument, 0, 'u'},
+	{"newstubs", no_argument, 0, 'k'},
+	{"depends", no_argument, 0, 'q'},
+	{"modinfo", no_argument, 0, 'm'},
+	{"impexp", no_argument, 0, 'f'},
+	{"disasm", no_argument, 0, 'w'},
+	{"disopts", required_argument, 0, 'i'},
+	{"disbase", required_argument, 0, 'b'},
+	{"symbols", no_argument, 0, 'y'},
+	{NULL, 0, 0, 0},
+};
 
 void DoOutput(OutputLevel level, const char *str)
 {
@@ -73,9 +101,11 @@ void init_args()
 int process_args(int argc, char **argv)
 {
 	int ch;
+	int opt_index = 0;
 	init_args();
 
-	while((ch = getopt(argc, argv, "fxcakptuqemdywo:s:n:")) != -1)
+	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:b:y", 
+					cmd_options, &opt_index)) != -1)
 	{
 		switch(ch)
 		{
@@ -99,6 +129,8 @@ int process_args(int argc, char **argv)
 					   break;
 			case 'w' : g_outputMode = OUTPUT_DISASM;
 					   break;
+			case 'i':  g_disopts = optarg;
+					   break;
 			case 'o' : g_pOutfile = optarg;
 					   break;
 			case 'n' : g_pNamefile = optarg;
@@ -108,6 +140,8 @@ int process_args(int argc, char **argv)
 			case 'k' : g_newstubs = 1;
 					   break;
 			case 'f' : g_outputMode = OUTPUT_IMPEXP;
+					   break;
+			case 'b':  g_dwBase = strtoul(optarg, NULL, 0);
 					   break;
 			case 's' : {
 						   int i;
@@ -163,28 +197,32 @@ void print_help()
 {
 	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] file\n");
 	COutput::Printf(LEVEL_INFO, "Options:\n");
-	COutput::Printf(LEVEL_INFO, "-o outfile : Output file. If not specified uses stdout\n");
-	COutput::Printf(LEVEL_INFO, "-c         : Output an IDC file (default)\n");
-	COutput::Printf(LEVEL_INFO, "-a         : Output a MAP file\n");
-	COutput::Printf(LEVEL_INFO, "-x         : Output an XML file\n");
-	COutput::Printf(LEVEL_INFO, "-p         : Output a PRX/PFX (from an ELF)\n");
-	COutput::Printf(LEVEL_INFO, "-e         : Output an ELF (from a PRX)\n");
-	COutput::Printf(LEVEL_INFO, "-d         : Enable debug mode\n");
-	COutput::Printf(LEVEL_INFO, "-s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
-	COutput::Printf(LEVEL_INFO, "-n imp.xml : Specify a XML file containing the nid tables\n");
-	COutput::Printf(LEVEL_INFO, "-t         : Emit stub files for the XML file passed on the command line\n");
-	COutput::Printf(LEVEL_INFO, "-u         : Emit stub files based on the exports of the specified prx files\n");
-	COutput::Printf(LEVEL_INFO, "-k         : Emit new style stubs for the SDK\n");
-	COutput::Printf(LEVEL_INFO, "-q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
-	COutput::Printf(LEVEL_INFO, "-m         : Print the module and library information to screen\n");
-	COutput::Printf(LEVEL_INFO, "-f         : Print the imports and exports of a prx\n");
-	COutput::Printf(LEVEL_INFO, "-w         : Disasm the executable sections of the file\n");
-	COutput::Printf(LEVEL_INFO, "-y         : Output special symbols file\n");
+	COutput::Printf(LEVEL_INFO, "--output,   -o outfile : Output file. If not specified uses stdout\n");
+	COutput::Printf(LEVEL_INFO, "--idcout,   -c         : Output an IDC file (default)\n");
+	COutput::Printf(LEVEL_INFO, "--mapout,   -a         : Output a MAP file\n");
+	COutput::Printf(LEVEL_INFO, "--xmlout,   -x         : Output an XML file\n");
+	COutput::Printf(LEVEL_INFO, "--prxout,   -p         : Output a PRX/PFX (from an ELF)\n");
+	COutput::Printf(LEVEL_INFO, "--elfout,   -e         : Output an ELF (from a PRX)\n");
+	COutput::Printf(LEVEL_INFO, "--debug,    -d         : Enable debug mode\n");
+	COutput::Printf(LEVEL_INFO, "--serial,   -s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
+	COutput::Printf(LEVEL_INFO, "--xmlfile,  -n imp.xml : Specify a XML file containing the nid tables\n");
+	COutput::Printf(LEVEL_INFO, "--stubs,    -t         : Emit stub files for the XML file passed on the command line\n");
+	COutput::Printf(LEVEL_INFO, "--prxstubs, -u         : Emit stub files based on the exports of the specified prx files\n");
+	COutput::Printf(LEVEL_INFO, "--newstubs, -k         : Emit new style stubs for the SDK\n");
+	COutput::Printf(LEVEL_INFO, "--depends,  -q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
+	COutput::Printf(LEVEL_INFO, "--modinfo,  -m         : Print the module and library information to screen\n");
+	COutput::Printf(LEVEL_INFO, "--impexp,   -f         : Print the imports and exports of a prx\n");
+	COutput::Printf(LEVEL_INFO, "--symbols,  -y         : Output special symbols file\n");
+	COutput::Printf(LEVEL_INFO, "--disasm,   -w         : Disasm the executable sections of the file\n");
+	COutput::Printf(LEVEL_INFO, "--disopts,  -i [opts]  : A list dissasembler options\n");
 	COutput::Printf(LEVEL_INFO, "\n");
-	COutput::Printf(LEVEL_INFO, "Example 1: prxtool -o output.idc -s xr myfile.prx\n");
-	COutput::Printf(LEVEL_INFO, "Outputs an IDC to output.idc, only serializing Exports and Relocs\n");
-	COutput::Printf(LEVEL_INFO, "Example 2: prxtool -c psplibdoc.xml\n");
-	COutput::Printf(LEVEL_INFO, "Outputs one or more stub .S files to the current directory from the XML file\n");
+	COutput::Printf(LEVEL_INFO, "Disassembler Options:\n");
+	COutput::Printf(LEVEL_INFO, "x - Print immediates all in hex (not just appropriate ones\n");
+	COutput::Printf(LEVEL_INFO, "d - When combined with 'x' prints the hex as signed\n");
+	COutput::Printf(LEVEL_INFO, "r - Print CPU registers using rN format rather than mnemonics (i.e. $a0)\n");
+	COutput::Printf(LEVEL_INFO, "s - Print the address as a symbol is possible\n");
+	COutput::Printf(LEVEL_INFO, "m - Disable macro instructions (e.g. nop, beqz etc.\n");
+	COutput::Printf(LEVEL_INFO, "w - Indicate PC, opcode information goes after the instruction disasm\n");
 }
 
 void output_elf(const char *file, FILE *out_fp)
@@ -315,18 +353,19 @@ void output_symbols(const char *file, FILE *out_fp)
 	}
 }
 
-void output_disasm(const char *file, FILE *out_fp)
+void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 {
 	CProcessPrx prx;
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
+	prx.SetNidMgr(nids);
 	if(prx.LoadFromFile(file) == false)
 	{
 		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures");
 	}
 	else
 	{
-		prx.Disasm(false, out_fp);
+		prx.Dump(false, out_fp, g_disopts, g_dwBase);
 	}
 }
 
@@ -676,6 +715,7 @@ int main(int argc, char **argv)
 
 	out_fp = stdout;
 	COutput::SetOutputHandler(DoOutput);
+	COutput::Printf(LEVEL_INFO, "PRXTool v%s : (c) TyRaNiD 2k6\n", PRXTOOL_VERSION);
 
 	if(process_args(argc, argv))
 	{
@@ -775,7 +815,7 @@ int main(int argc, char **argv)
 		}
 		else if(g_outputMode == OUTPUT_DISASM)
 		{
-			output_disasm(g_ppInfiles[0], out_fp);
+			output_disasm(g_ppInfiles[0], out_fp, &nids);
 		}
 		else
 		{

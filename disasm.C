@@ -68,6 +68,17 @@ struct Instruction
 	const char *fmt;
 };
 
+#define ADDR_TYPE_16 1
+#define ADDR_TYPE_26 2
+
+struct Branch
+{
+	unsigned int opcode;
+	unsigned int mask;
+	int addrtype;
+	SymbolType type;
+};
+
 static const char *regName[32] =
 {
     "zr", "at", "v0", "v1", "a0", "a1", "a2", "a3",
@@ -89,6 +100,8 @@ struct Instruction macro[] =
 	{ "bal",		0x04110000, 0xFFFF0000, "%O"		},
 	{ "bnez",		0x14000000, 0xFC1F0000,	"%s, %O"	},
 	{ "bnezl",		0x54000000, 0xFC1F0000,	"%s, %O"	},
+	{ "beqz",		0x10000000, 0xFC1F0000,	"%s, %O"},
+	{ "beqzl",		0x50000000, 0xFC1F0000,	"%s, %O"},
 	{ "neg",		0x00000022, 0xFFE007FF,	"%d, %t"	},
 	{ "negu",		0x00000023, 0xFFE007FF,	"%d, %t"	},
 	{ "not",		0x00000027, 0xFC1F07FF,	"%d, %s"	},
@@ -522,6 +535,36 @@ struct Instruction inst[] =
 	{ "vzero.t", 0xD0068000, 0xFFFFFF80, "%zt" },
 	};
 
+static Branch g_branchinst[] = {
+	{ /*"beq",*/		0x10000000, 0xFC000000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"beql",*/		0x50000000, 0xFC000000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bgez",	*/	0x04010000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bgezal",	*/	0x04110000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_FUNC},
+	{ /*"bgezl",*/		0x04030000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bgtz",*/		0x1C000000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bgtzl",*/		0x5C000000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"blez",*/		0x18000000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"blezl",*/		0x58000000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bltz",	*/	0x04000000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bltzl",*/		0x04020000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bltzal",*/		0x04100000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bltzall",*/	0x04120000, 0xFC1F0000,	ADDR_TYPE_16, SYMBOL_FUNC},
+	{ /*"bne",*/		0x14000000, 0xFC000000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bnel",*/		0x54000000, 0xFC000000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"j",*/			0x08000000, 0xFC000000,	ADDR_TYPE_26, SYMBOL_LOCAL},
+	{ /*"jal",*/		0x0C000000, 0xFC000000,	ADDR_TYPE_26, SYMBOL_FUNC},
+	/* Cop1 Branches */
+	{/*"bc1f",*/	0x45000000, 0xFFFF0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{/*"bc1fl",*/	0x45020000, 0xFFFF0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{/*"bc1t",*/	0x45010000, 0xFFFF0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	{/*"bc1tl",*/	0x45030000, 0xFFFF0000,	ADDR_TYPE_16, SYMBOL_LOCAL},
+	/* Cop2 Branches */
+	{ /*"bvf",*/	 0x49000000, 0xFFE30000, ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bvfl",*/	 0x49020000, 0xFFE30000, ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bvt",*/	 0x49010000, 0xFFE30000, ADDR_TYPE_16, SYMBOL_LOCAL},
+	{ /*"bvtl",*/	 0x49030000, 0xFFE30000, ADDR_TYPE_16, SYMBOL_LOCAL},
+};
+
 extern const char *regName[32];
 
 static const char *cop0_regs[32] = 
@@ -548,7 +591,9 @@ static int g_macro = 0;
 static int g_printreal = 0;
 static int g_printregs = 0;
 static int g_regmask = 0;
-static SymResolve g_symresolver = NULL;
+static int g_printswap = 0;
+static int g_signedhex = 0;
+static SymbolMap *g_syms = NULL;
 
 struct DisasmOpt
 {
@@ -564,7 +609,99 @@ struct DisasmOpt g_disopts[DISASM_OPT_MAX] = {
 	{ DISASM_OPT_MACRO, &g_macro, "Macros" },
 	{ DISASM_OPT_PRINTREAL, &g_printreal, "Print Real Address" },
 	{ DISASM_OPT_PRINTREGS, &g_printregs, "Print Regs" },
+	{ DISASM_OPT_PRINTSWAP, &g_printswap, "Print Swap" },
+	{ DISASM_OPT_SIGNEDHEX, &g_signedhex, "Signed Hex" },
 };
+
+SymbolType disasmResolveSymbol(unsigned int PC, char *name, int namelen)
+{
+	SymbolEntry *s;
+	SymbolType type = SYMBOL_NOSYM;
+
+	if(g_syms)
+	{
+		s = (*g_syms)[PC];
+		if(s)
+		{
+			type = s->type;
+			snprintf(name, namelen, "%s", s->name.c_str());
+		}
+	}
+
+	return type;
+}
+
+SymbolEntry* disasmFindSymbol(unsigned int PC)
+{
+	SymbolEntry *s = NULL;
+
+	if(g_syms)
+	{
+		s = (*g_syms)[PC];
+	}
+
+	return s;
+}
+
+void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &syms)
+{
+	int i;
+	int size;
+
+	size = sizeof(g_branchinst) / sizeof(Branch);
+	for(i = 0; i < size; i++)
+	{
+		if((opcode & g_branchinst[i].mask) == g_branchinst[i].opcode)
+		{
+			char buf[128];
+			unsigned int addr;
+			SymbolEntry *s;
+			int ofs;
+
+			switch(g_branchinst[i].addrtype)
+			{
+				case ADDR_TYPE_16: ofs = (signed short) (opcode & 0xFFFF);
+								   addr = PC + 4 + ofs * 4;
+								   break;
+				case ADDR_TYPE_26: addr = (opcode & 0x03FFFFFF) << 2;
+								   addr += PC & 0xF0000000;
+								   break;
+				default: addr = 0xFFFFFFFF;
+						 break;
+			};
+
+			switch(g_branchinst[i].type)
+			{
+				case SYMBOL_FUNC: snprintf(buf, sizeof(buf), "sub_%08X", addr);
+								  break;
+				case SYMBOL_LOCAL: snprintf(buf, sizeof(buf), "loc_%08X", addr);
+								   break;
+				default: strcpy(buf, "loc_ERROR_INVALID_TYPE");
+						 break;
+			};
+
+			s = syms[addr];
+			if(s == NULL)
+			{
+				s = new SymbolEntry;
+				s->addr = addr;
+				s->type = g_branchinst[i].type;
+				s->size = 0;
+				s->name = buf;
+				s->refs.insert(s->refs.end(), PC);
+				syms[addr] = s;
+			}
+			else
+			{
+				if((s->type != SYMBOL_FUNC) && (g_branchinst[i].type == SYMBOL_FUNC))
+				{
+					s->type = SYMBOL_FUNC;
+				}
+				s->refs.insert(s->refs.end(), PC);
+			}
+		}
+	}
+}
 
 void disasmSetHexInts(int hexints)
 {
@@ -591,9 +728,9 @@ void disasmSetPrintReal(int printreal)
 	g_printreal = printreal;
 }
 
-void disasmSetSymResolver(SymResolve symresolver)
+void disasmSetSymbols(SymbolMap *syms)
 {
-	g_symresolver = symresolver;
+	g_syms = syms;
 }
 
 void disasmSetOpts(const char *opts, int set)
@@ -641,7 +778,7 @@ static char *print_cpureg(int reg, char *output)
 	}
 	else
 	{
-		len = sprintf(output, "$%02d", reg);
+		len = sprintf(output, "r%d", reg);
 	}
 
 	if(g_printregs)
@@ -676,9 +813,19 @@ static char *print_imm(int ofs, char *output)
 
 	if(g_hexints)
 	{
-		unsigned int val = ofs;
-		val &= 0xFFFF;
-		len = sprintf(output, "0x%04X", val);
+		if((g_signedhex) && (ofs < 0))
+		{
+			int real;
+
+			real = -ofs;
+			len = sprintf(output, "-0x%X", real);
+		}
+		else
+		{
+			unsigned int val = ofs;
+			val &= 0xFFFF;
+			len = sprintf(output, "0x%X", val);
+		}
 	}
 	else
 	{
@@ -694,9 +841,9 @@ static char *print_jump(unsigned int addr, char *output)
 	char symbol[128];
 	int symfound = 0;
 
-	if(g_symresolver)
+	if(g_syms)
 	{
-		symfound = g_symresolver(addr, symbol, sizeof(symbol));
+		symfound = disasmResolveSymbol(addr, symbol, sizeof(symbol));
 	}
 
 	if(symfound)
@@ -721,18 +868,9 @@ static char *print_ofs(int ofs, int reg, char *output, unsigned int *realregs)
 	}
 	else
 	{
-		if(g_hexints)
-		{
-			unsigned int val = ofs;
-			val &= 0xFFFF;
-			len = sprintf(output, "0x%04X(", val);
-		}
-		else
-		{
-			len = sprintf(output, "%d(", ofs);
-		}
+		output = print_imm(ofs, output);
+		*output++ = '(';
 
-		output += len;
 		output = print_cpureg(reg, output);
 		*output++ = ')';
 	}
@@ -742,9 +880,9 @@ static char *print_ofs(int ofs, int reg, char *output, unsigned int *realregs)
 
 static char *print_pcofs(int ofs, unsigned int PC, char *output)
 {
-	ofs = (ofs + 1) * 4;
+	ofs = ofs * 4;
 
-	return print_jump(PC + ofs, output);
+	return print_jump(PC + 4 + ofs, output);
 }
 
 static char *print_jumpr(int reg, char *output, unsigned int *realregs)
@@ -1014,27 +1152,62 @@ end:
 	*output = 0;
 }
 
+void format_line(char *code, int codelen, const char *addr, unsigned int opcode, const char *name, const char *args)
+{
+	char ascii[5];
+	int i;
+
+	if(name == NULL)
+	{
+		name = "Unknown";
+		args = "";
+	}
+
+	for(i = 0; i < 4; i++)
+	{
+		unsigned char ch;
+
+		ch = (unsigned char) ((opcode >> (i*8)) & 0xFF);
+		if((ch < 32) || (ch > 126))
+		{
+			ch = '.';
+		}
+		ascii[i] = ch;
+	}
+	ascii[4] = 0;
+
+	if(g_printswap)
+	{
+		snprintf(code, codelen, "%-10s %-40s ; %s: 0x%08X '%s'", name, args, addr, opcode, ascii);
+	}
+	else
+	{
+		snprintf(code, codelen, "%s: 0x%08X '%s' - %-10s %s", addr, opcode, ascii, name, args);
+	}
+}
+
 const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int *realregs, unsigned int *regmask)
 {
 	static char code[256];
+	const char *name = NULL;
+	char args[128];
 	char addr[128];
 	int size;
 	int i;
 	struct Instruction *ix = NULL;
 
 	sprintf(addr, "0x%08X", PC);
-	if((g_symresolver) && (g_symaddr))
+	if((g_syms) && (g_symaddr))
 	{
 		char addrtemp[128];
 		/* Symbol resolver shouldn't touch addr unless it finds symbol */
-		if(g_symresolver(PC, addrtemp, sizeof(addrtemp)))
+		if(disasmResolveSymbol(PC, addrtemp, sizeof(addrtemp)))
 		{
-			sprintf(addr, "%-20s", addrtemp);
+			snprintf(addr, sizeof(addr), "%-20s", addrtemp);
 		}
 	}
 
 	g_regmask = 0;
-	sprintf(code, "%s: %08X - Unknown", addr, opcode);
 
 	if(!g_macro)
 	{
@@ -1062,29 +1235,17 @@ const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int
 
 	if(ix)
 	{
-		char args[128];
-		char ascii[5];
-
 		decode_args(opcode, PC, ix->fmt, args, realregs);
-		for(i = 0; i < 4; i++)
-		{
-			unsigned char ch;
-
-			ch = (unsigned char) ((opcode >> (i*8)) & 0xFF);
-			if((ch < 32) || (ch > 126))
-			{
-				ch = '.';
-			}
-			ascii[i] = ch;
-		}
-		ascii[4] = 0;
-		sprintf(code, "%s: 0x%08X '%s' - %-10s %s", addr, opcode, ascii, ix->name, args);
 
 		if(regmask) 
 		{
 			*regmask = g_regmask;
 		}
+
+		name = ix->name;
 	}
+
+	format_line(code, sizeof(code), addr, opcode, name, args);
 
 	return code;
 }

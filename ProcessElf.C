@@ -243,6 +243,46 @@ ElfSection* CProcessElf::ElfFindSection(const char *szName)
 	return pSection;
 }
 
+ElfSection *CProcessElf::ElfFindSectionByAddr(unsigned int dwAddr)
+{
+	ElfSection* pSection = NULL;
+
+	if((m_pElfSections != NULL) && (m_iSHCount > 0) && (m_pElfStrtab != NULL))
+	{
+		int iLoop;
+
+		for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+		{
+			u32 sectaddr = m_pElfSections[iLoop].iAddr;
+			u32 sectsize = m_pElfSections[iLoop].iSize;
+
+			if((dwAddr >= sectaddr) && (dwAddr < (sectaddr + sectsize)))
+			{
+				pSection = &m_pElfSections[iLoop];
+			}
+		}
+	}
+
+	return pSection;
+}
+
+bool CProcessElf::ElfAddrIsText(unsigned int dwAddr)
+{
+	bool blRet = false;
+	ElfSection *sect;
+
+	sect = ElfFindSectionByAddr(dwAddr);
+	if(sect)
+	{
+		if(sect->iFlags & SHF_EXECINSTR)
+		{
+			blRet = true;
+		}
+	}
+
+	return blRet;
+}
+
 const char *CProcessElf::GetSymbolName(u32 name, u32 shndx)
 {
 	if((shndx > 0) && (shndx < (u32) m_iSHCount))
