@@ -869,8 +869,6 @@ static char *print_jump(unsigned int addr, char *output)
 
 static char *print_ofs(int ofs, int reg, char *output, unsigned int *realregs)
 {
-	int len;
-
 	if((g_printreal) && (realregs))
 	{
 		output = print_jump(realregs[reg] + ofs, output);

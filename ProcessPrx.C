@@ -183,7 +183,7 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 				COutput::Printf(LEVEL_DEBUG, "Found variable nid:0x%08X addr:0x%08X name:%s\n",
 						pLib->vars[iLoop].nid, pLib->vars[iLoop].addr, pLib->vars[iLoop].name);
 				varFixup = pLib->vars[iLoop].addr;
-				while(varData = m_vMem.GetU32(varFixup))
+				while((varData = m_vMem.GetU32(varFixup)))
 				{
 					COutput::Printf(LEVEL_DEBUG, "Variable Fixup: addr:%08X type:%08X\n", 
 							(varData & 0x3FFFFFF) << 2, varData >> 26);
@@ -835,7 +835,7 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 		/* Only modify normal elf relocation tables */
 		if(m_pElfSections[iLoop].iType == SHT_REL)
 		{
-			int iRelLoop;
+			u32 iRelLoop;
 			Elf32_Rel *reloc;
 
 			reloc = (Elf32_Rel*) (pElfCopy + m_pElfSections[iLoop].iOffset);
@@ -851,7 +851,7 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 
 	if((m_elfHeader.iShoff > 0) && (m_elfHeader.iShnum > 0) && (m_elfHeader.iShentsize > 0))
 	{
-		int i;
+		u32 i;
 		pSection = (Elf32_Shdr*) (pElfCopy + m_elfHeader.iShoff);
 
 		for(i = 0; i < m_elfHeader.iShnum; i++)
@@ -1026,6 +1026,27 @@ void CProcessPrx::FreeImms(ImmMap &imms)
 	}
 }
 
+static int reloc_sort(const void *rel1, const void *rel2)
+{
+	const ElfReloc *pRel1, *pRel2;
+	int r1base, r2base;
+
+	pRel1 = static_cast<const ElfReloc *>(rel1);
+	pRel2 = static_cast<const ElfReloc *>(rel2);
+	r1base = pRel1->symbol & 0xFF;
+	r2base = pRel2->symbol & 0xFF;
+
+	/* First sort by program header */
+	if(r1base != r2base)
+	{
+		return r1base - r2base;
+	}
+
+	/* If same program header then sort by relative offset */
+
+	return pRel1->offset - pRel2->offset; 
+}
+
 void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 {
 	struct RegEntry
@@ -1035,9 +1056,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 		u32 *inst;
 	};
 
-	ElfSection* pModInfoSect;
 	int iLoop;
-	u32 iVal;
 	u32 *pData;
 	RegEntry regs[32];
 
@@ -1058,6 +1077,9 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 	{
 		return;
 	}
+
+	/* Sort the relocations, might work, might not */
+	qsort(m_pElfRelocs, m_iRelocCount, sizeof(ElfReloc), reloc_sort);
 
 	pData = NULL;
 	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
@@ -1245,7 +1267,7 @@ static void print_row(FILE *fp, const u32* row, s32 row_size, u32 addr)
 
 void CProcessPrx::DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData)
 {
-	int i;
+	u32 i;
 	u32 row[16];
 	int row_size;
 
@@ -1354,7 +1376,7 @@ bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode)
 
 void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData)
 {
-	int i;
+	u32 i;
 	std::string curr = "";
 	int iPrintHead = 0;
 	u32 dwRealLen = 0;
@@ -1409,7 +1431,7 @@ void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pD
 
 void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase)
 {
-	int iILoop;
+	u32 iILoop;
 	u32 *pInst;
 	pInst  = (u32*) pData;
 
@@ -1427,8 +1449,8 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 						    	  fprintf(fp, "; Subroutine %s - Address 0x%08X ", s->name.c_str(), dwAddr);
 								  if(s->alias.size() > 0)
 								  {
-									  fprintf(fp, "- Aliases: ", s->alias.size());
-									  int i;
+									  fprintf(fp, "- Aliases: ");
+									  u32 i;
 									  for(i = 0; i < s->alias.size()-1; i++)
 									  {
 										  fprintf(fp, "%s, ", s->alias[i].c_str());
@@ -1447,7 +1469,7 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 
 			if(s->refs.size() > 0)
 			{
-				int i;
+				u32 i;
 				fprintf(fp, "\t\t; Refs: ");
 				for(i = 0; i < s->refs.size(); i++)
 				{
@@ -1585,7 +1607,7 @@ void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
 	{
 		if(m_pElfSections[iLoop].iFlags & SHF_EXECINSTR)
 		{
-			int iILoop;
+			u32 iILoop;
 			u32 dwAddr;
 			u32 *pInst;
 			dwAddr = m_pElfSections[iLoop].iAddr;

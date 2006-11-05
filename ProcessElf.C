@@ -371,7 +371,6 @@ bool CProcessElf::LoadSymbols()
 		Elf32_Sym *pSym;
 		int iLoop, iSymcount;
 		u32 symidx;
-		u32 name;
 
 		symidx = pSymtab->iLink;
 		iSymcount = pSymtab->iSize / sizeof(Elf32_Sym);
