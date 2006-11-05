@@ -253,12 +253,15 @@ ElfSection *CProcessElf::ElfFindSectionByAddr(unsigned int dwAddr)
 
 		for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 		{
-			u32 sectaddr = m_pElfSections[iLoop].iAddr;
-			u32 sectsize = m_pElfSections[iLoop].iSize;
-
-			if((dwAddr >= sectaddr) && (dwAddr < (sectaddr + sectsize)))
+			if(m_pElfSections[iLoop].iFlags & SHF_ALLOC)
 			{
-				pSection = &m_pElfSections[iLoop];
+				u32 sectaddr = m_pElfSections[iLoop].iAddr;
+				u32 sectsize = m_pElfSections[iLoop].iSize;
+
+				if((dwAddr >= sectaddr) && (dwAddr < (sectaddr + sectsize)))
+				{
+					pSection = &m_pElfSections[iLoop];
+				}
 			}
 		}
 	}

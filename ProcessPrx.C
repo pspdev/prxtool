@@ -1094,7 +1094,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 								  if((inst >> 26) == 0xF)
 								  {
 									  reg = (inst >> 16) & 0x1F;
-									  regs[reg].base = ((inst & 0xFFFF) << 16) + dwCurrBase;
+									  regs[reg].base = ((inst & 0xFFFF) << 16);
 									  regs[reg].set = 0;
 									  regs[reg].inst = pData;
 								  }
@@ -1122,7 +1122,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 
 								  hiinst = LW(*regs[reg].inst);
 
-								  addr = regs[reg].base;
+								  addr = regs[reg].base + dwCurrBase;
 								  /* ori */
 								  if((loinst >> 26) == 0xD)
 								  {
@@ -1151,7 +1151,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 								  {
 									  hiinst &= ~0xFFFF;
 									  hiinst |= ((addr >> 16) & 0xFFFF);
-									  regs[reg].base = addr & 0xFFFF0000;
+									  regs[reg].base = (addr - dwCurrBase) & 0xFFFF0000;
 									  regs[reg].set = 1;
 									  SW(*regs[reg].inst, hiinst);
 									  regs[reg].set = true;
