@@ -37,6 +37,9 @@ static const char* g_szRelTypes[13] =
 /* Flag indicates the reloc'ed field should be fixed up relative to the data section base */
 #define RELOC_REL_DATA 256
 
+/* Minimum string size */
+#define MINIMUM_STRING 4
+
 CProcessPrx::CProcessPrx()
 	: CProcessElf()
 	, m_defNidMgr()
@@ -1270,11 +1273,91 @@ void CProcessPrx::DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData
 
 #define ISSPACE(x) ((x) == '\t' || (x) == '\r' || (x) == '\n' || (x) == '\v' || (x) == '\f')
 
+bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode)
+{
+	int i;
+	std::string curr = "";
+	int iSize = m_vMem.GetSize(dwAddr);
+	unsigned int ch;
+	bool blRet = false;
+
+	if(unicode)
+	{
+		/* If a misaligned word address then exit, little chance it is a valid unicode string */
+		if(dwAddr & 1)
+		{
+			return false;
+		}
+
+		iSize = iSize / 2;
+	}
+
+	for(i = 0; i < iSize; i++)
+	{
+		/* Dirty unicode, we dont _really_ care about it being unicode
+		 * as opposed to being 16bits */
+		if(!unicode)
+		{
+			ch = m_vMem.GetU8(dwAddr);
+			dwAddr++;
+		}
+		else
+		{
+			ch = m_vMem.GetU16(dwAddr);
+			dwAddr += 2;
+		}
+
+		if((ch > 0) && (ch < 127))
+		{
+			if((ch >= 32) && (ch < 127))
+			{
+				curr += (unsigned char) ch;
+			}
+			else if(ISSPACE(ch))
+			{
+				switch(ch)
+				{
+					case '\t': curr += "\\t";
+							   break;
+					case '\r': curr += "\\r";
+									   break;
+					case '\n': curr += "\\n";
+							   break;
+					case '\v': curr += "\\v";
+							   break;
+					case '\f': curr += "\\f";
+							   break;
+					default: break;
+					};
+			}
+		}
+		else
+		{
+			if(curr.length() >= MINIMUM_STRING)
+			{
+				blRet = true;
+				if(unicode)
+				{
+					str = "L\"" + curr + "\"";
+				}
+				else
+				{
+					str = "\"" + curr + "\"";
+				}
+			}
+			break;
+		}
+	}
+
+	return blRet;
+}
+
 void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData)
 {
 	int i;
 	std::string curr = "";
 	int iPrintHead = 0;
+	u32 dwRealLen = 0;
 
 	for(i = 0; i < iSize; i++)
 	{
@@ -1299,30 +1382,32 @@ void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pD
 					case '\f': curr += "\\f";
 							   break;
 					default: break;
-					};
+				};
 			}
+			dwRealLen++;
 		}
 		else
 		{
 			if(!curr.empty())
 			{
-				if(curr.length() > 3)
+				if(curr.length() >= MINIMUM_STRING)
 				{
 					if(iPrintHead == 0)
 					{
 						fprintf(fp, "\n; ASCII Strings\n");
 						iPrintHead = 1;
 					}
-					fprintf(fp, "0x%08X: %s\n", dwAddr, curr.c_str());
+					fprintf(fp, "0x%08X: %s\n", dwAddr-dwRealLen, curr.c_str());
 				}
 				curr.clear();
 			}
+			dwRealLen = 0;
 		}
 		dwAddr++;
 	}
 }
 
-void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms)
+void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase)
 {
 	int iILoop;
 	u32 *pInst;
@@ -1376,13 +1461,54 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 		if(imm)
 		{
 			SymbolEntry *sym = disasmFindSymbol(imm->target);
-			if(sym)
+			if(imm->text)
 			{
-				fprintf(fp, "; Data ref %s/%08X", sym->name.c_str(), imm->target);
+				if(sym)
+				{
+					fprintf(fp, "; Text ref %s (0x%08X)", sym->name.c_str(), imm->target);
+				}
+				else
+				{
+					fprintf(fp, "; Text ref 0x%08X", imm->target);
+				}
 			}
 			else
 			{
+				std::string str;
+
 				fprintf(fp, "; Data ref 0x%08X", imm->target);
+				if(ReadString(imm->target-dwBase, str, false) || ReadString(imm->target-dwBase, str, true))
+				{
+					fprintf(fp, " %s", str.c_str());
+				}
+				else
+				{
+					u8 *ptr = (u8*) m_vMem.GetPtr(imm->target - dwBase);
+					if(ptr)
+					{
+						/* If a valid pointer try and print some data */
+						int i;
+						fprintf(fp, " ... ");
+						if((imm->target & 3) == 0)
+						{
+							u32 *p32 = (u32*) ptr;
+							/* Possibly words */
+							for(i = 0; i < 4; i++)
+							{
+								fprintf(fp, "0x%08X ", LW(*p32));
+								p32++;
+							}
+						}
+						else
+						{
+							/* Just guess at printing bytes */
+							for(i = 0; i < 16; i++)
+							{
+								fprintf(fp, "0x%02X ", *ptr++);
+							}
+						}
+					}
+				}
 			}
 			fprintf(fp, "\n");
 		}
@@ -1490,7 +1616,7 @@ void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
 					Disasm(fp, m_pElfSections[iLoop].iAddr + dwBase, 
 							m_pElfSections[iLoop].iSize, 
 							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr),
-							imms);
+							imms, dwBase);
 				}
 				else
 				{

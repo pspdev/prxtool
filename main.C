@@ -220,7 +220,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "x - Print immediates all in hex (not just appropriate ones\n");
 	COutput::Printf(LEVEL_INFO, "d - When combined with 'x' prints the hex as signed\n");
 	COutput::Printf(LEVEL_INFO, "r - Print CPU registers using rN format rather than mnemonics (i.e. $a0)\n");
-	COutput::Printf(LEVEL_INFO, "s - Print the address as a symbol is possible\n");
+	COutput::Printf(LEVEL_INFO, "s - Print the PC as a symbol if possible\n");
 	COutput::Printf(LEVEL_INFO, "m - Disable macro instructions (e.g. nop, beqz etc.\n");
 	COutput::Printf(LEVEL_INFO, "w - Indicate PC, opcode information goes after the instruction disasm\n");
 }

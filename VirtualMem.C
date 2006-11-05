@@ -197,10 +197,6 @@ u32 CVirtualMem::GetSize(u32 iAddr)
 	{
 		iSizeLeft = m_iSize - (iAddr - m_iBaseAddr);
 	}
-	else
-	{
-
-	}
 
 	return iSizeLeft;
 }

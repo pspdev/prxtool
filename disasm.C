@@ -778,7 +778,16 @@ static char *print_cpureg(int reg, char *output)
 	}
 	else
 	{
-		len = sprintf(output, "r%d", reg);
+		if(reg > 0)
+		{
+			len = sprintf(output, "r%d", reg);
+		}
+		else
+		{
+			*output = '0';
+			*(output+1) = 0;
+			len = 1;
+		}
 	}
 
 	if(g_printregs)
