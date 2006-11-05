@@ -530,6 +530,7 @@ bool CProcessPrx::LoadRelocs()
 						m_pElfRelocs[iCurrRel].base = 0;
 						m_pElfRelocs[iCurrRel].type = ELF32_R_TYPE(LW(reloc->r_info));
 						m_pElfRelocs[iCurrRel].symbol = ELF32_R_SYM(LW(reloc->r_info));
+						m_pElfRelocs[iCurrRel].info = LW(reloc->r_info);
 						m_pElfRelocs[iCurrRel].offset = reloc->r_offset;
 						iCurrRel++;
 						reloc++;
@@ -545,9 +546,9 @@ bool CProcessPrx::LoadRelocs()
 				{
 					if(m_pElfRelocs[iLoop].type < 13)
 					{
-						COutput::Printf(LEVEL_DEBUG, "Reloc %s:%d Type:%s Symbol:%d Offset %08X\n", 
+						COutput::Printf(LEVEL_DEBUG, "Reloc %s:%d Type:%s Symbol:%d Offset %08X Info:%08X\n", 
 								m_pElfRelocs[iLoop].secname, iLoop, g_szRelTypes[m_pElfRelocs[iLoop].type],
-								m_pElfRelocs[iLoop].symbol, m_pElfRelocs[iLoop].offset);
+								m_pElfRelocs[iLoop].symbol, m_pElfRelocs[iLoop].offset, m_pElfRelocs[iLoop].info);
 					}
 					else
 					{
@@ -1029,17 +1030,14 @@ void CProcessPrx::FreeImms(ImmMap &imms)
 static int reloc_sort(const void *rel1, const void *rel2)
 {
 	const ElfReloc *pRel1, *pRel2;
-	int r1base, r2base;
 
 	pRel1 = static_cast<const ElfReloc *>(rel1);
 	pRel2 = static_cast<const ElfReloc *>(rel2);
-	r1base = pRel1->symbol & 0xFF;
-	r2base = pRel2->symbol & 0xFF;
 
 	/* First sort by program header */
-	if(r1base != r2base)
+	if(pRel1->symbol != pRel2->symbol)
 	{
-		return r1base - r2base;
+		return pRel1->symbol - pRel2->symbol;
 	}
 
 	/* If same program header then sort by relative offset */
@@ -1051,9 +1049,12 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 {
 	struct RegEntry
 	{
-		unsigned int base;
-		bool set;
+		/* Address of the relocation */
+		unsigned int addr;
+		/* Pointer to the instruction data */
 		u32 *inst;
+		/* Fixed up by an ori instruction */
+		int ori;
 	};
 
 	int iLoop;
@@ -1080,6 +1081,38 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 
 	/* Sort the relocations, might work, might not */
 	qsort(m_pElfRelocs, m_iRelocCount, sizeof(ElfReloc), reloc_sort);
+
+#if 0
+	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
+	{
+		ElfReloc *rel = &m_pElfRelocs[iLoop];
+		int iOfsPH;
+		int iValPH;
+		u32 dwRealOfs;
+		u32 inst;
+		u32 reg;
+
+		if((rel->type == R_MIPS_HI16) || (rel->type == R_MIPS_LO16))
+		{
+			iOfsPH = rel->symbol & 0xFF;
+			iValPH = (rel->symbol >> 8) & 0xFF;
+			dwRealOfs = rel->offset + m_pElfPrograms[iOfsPH].iVaddr;
+			inst = m_vMem.GetU32(dwRealOfs);
+			if(rel->type == R_MIPS_HI16)
+			{
+				reg = (inst >> 16) & 0x1F;
+			}
+			else
+			{
+				reg = (inst >> 21) & 0x1F;
+			}
+
+			COutput::Printf(LEVEL_INFO, "Sorted Reloc %s:%-4d Symbol:%-4d Real:%08X Reg:%s:%d\n", 
+					rel->secname, iLoop, 
+					rel->symbol, dwRealOfs, g_szRelTypes[rel->type],reg);
+		}
+	}
+#endif
 
 	pData = NULL;
 	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
@@ -1110,15 +1143,28 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 		{
 			case R_MIPS_HI16: {
 								  int reg;
-								  int inst;
+								  u32 inst;
 								  inst = LW(*pData);
 								  /* If not a lui instruction I don't know what it is */
 								  if((inst >> 26) == 0xF)
 								  {
 									  reg = (inst >> 16) & 0x1F;
-									  regs[reg].base = ((inst & 0xFFFF) << 16);
-									  regs[reg].set = 0;
+									  if(regs[reg].inst)
+									  {
+										  u32 oldinst;
+										  /* Flush old instruction data to disk */
+										  oldinst = LW(*regs[reg].inst);
+										  oldinst &= ~0xFFFF;
+										  if((regs[reg].addr & 0x8000) && (!regs[reg].ori))
+										  {
+											  regs[reg].addr += 0x10000;
+										  }
+										  oldinst |= (regs[reg].addr >> 16);
+										  SW(*regs[reg].inst, oldinst);
+									  }
+									  regs[reg].addr = 0;
 									  regs[reg].inst = pData;
+									  regs[reg].ori = 0;
 								  }
 								  else
 								  {
@@ -1130,7 +1176,6 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 								  u32 hiinst;
 								  u32 loinst;
 								  u32 addr;
-								  int ori = 0;
 								  int reg;
 								  ImmEntry *imm;
 
@@ -1143,13 +1188,13 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 								  }
 
 								  hiinst = LW(*regs[reg].inst);
+								  addr = ((hiinst & 0xFFFF) << 16) + dwCurrBase;
 
-								  addr = regs[reg].base + dwCurrBase;
 								  /* ori */
 								  if((loinst >> 26) == 0xD)
 								  {
 									  addr = addr | (loinst & 0xFFFF);
-									  ori = 1;
+									  regs[reg].ori = 1;
 								  }
 								  else
 								  {
@@ -1162,22 +1207,9 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 								  imm->text = ElfAddrIsText(addr - dwBase);
 								  imms[dwRealOfs + dwBase] = imm;
 
-								  if((addr & 0x8000) && (!regs[reg].set) && (!ori))
-								  {
-									  addr += 0x10000;
-								  }
-
 								  loinst &= ~0xFFFF;
 								  loinst |= (addr & 0xFFFF);
-								  if(!regs[reg].set)
-								  {
-									  hiinst &= ~0xFFFF;
-									  hiinst |= ((addr >> 16) & 0xFFFF);
-									  regs[reg].base = (addr - dwCurrBase) & 0xFFFF0000;
-									  regs[reg].set = 1;
-									  SW(*regs[reg].inst, hiinst);
-									  regs[reg].set = true;
-								  }
+								  regs[reg].addr = addr;
 
 								  SW(*pData, loinst);
 							  }
@@ -1206,6 +1238,24 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 			default: /* Do nothing */
 							  break;
 		};
+	}
+
+	/* Flush any remaining HI relocations */
+	for(iLoop = 0; iLoop < 32; iLoop++)
+	{
+		if(regs[iLoop].inst)
+		{
+			u32 oldinst;
+			/* Flush old instruction data to disk */
+			oldinst = LW(*regs[iLoop].inst);
+			oldinst &= ~0xFFFF;
+			if((regs[iLoop].addr & 0x8000) && (!regs[iLoop].ori))
+			{
+				regs[iLoop].addr += 0x10000;
+			}
+			oldinst |= (regs[iLoop].addr >> 16);
+			SW(*regs[iLoop].inst, oldinst);
+		}
 	}
 }
 

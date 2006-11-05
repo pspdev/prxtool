@@ -96,6 +96,7 @@ struct ElfReloc
 	/* Offset into the file */
 	u32 offset;
 	/* New Address for the relocation (to do with what you will) */
+	u32 info;
 	u32 addr;
 };
 

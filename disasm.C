@@ -1130,7 +1130,8 @@ static void decode_args(unsigned int opcode, unsigned int PC, const char *fmt, c
 							  output = print_vfpureg(reg, fmt[i+1], output); i++; 
 							  }
 							  break;
-				case 'z': if(fmt[i+1]) { output = print_vfpureg(VD(opcode), fmt[i+1], output); i++; }break;
+				case 'z': if(fmt[i+1]) { output = print_vfpureg(VD(opcode), fmt[i+1], output); i++; }
+						  break;
 				case 'v': break;
 				case 'X': if(fmt[i+1]) { output = print_vfpureg(VO(opcode), fmt[i+1], output); i++; }
 						  break;
@@ -1224,6 +1225,7 @@ const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int
 			if((opcode & macro[i].mask) == macro[i].opcode)
 			{
 				ix = &macro[i];
+				break;
 			}
 		}
 	}
@@ -1236,6 +1238,7 @@ const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int
 			if((opcode & inst[i].mask) == inst[i].opcode)
 			{
 				ix = &inst[i];
+				break;
 			}
 		}
 	}
