@@ -67,7 +67,7 @@ void disasmSetPrintReal(int printreal);
 void disasmSetOpts(const char *opts, int set);
 const char *disasmGetOpts(void);
 void disasmPrintOpts(void);
-const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int *realregs, unsigned int *regmask);
+const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int *realregs, unsigned int *regmask, int noaddr);
 
 void disasmSetSymbols(SymbolMap *syms);
 void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &syms);

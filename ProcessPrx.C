@@ -1082,38 +1082,6 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 	/* Sort the relocations, might work, might not */
 	qsort(m_pElfRelocs, m_iRelocCount, sizeof(ElfReloc), reloc_sort);
 
-#if 0
-	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
-	{
-		ElfReloc *rel = &m_pElfRelocs[iLoop];
-		int iOfsPH;
-		int iValPH;
-		u32 dwRealOfs;
-		u32 inst;
-		u32 reg;
-
-		if((rel->type == R_MIPS_HI16) || (rel->type == R_MIPS_LO16))
-		{
-			iOfsPH = rel->symbol & 0xFF;
-			iValPH = (rel->symbol >> 8) & 0xFF;
-			dwRealOfs = rel->offset + m_pElfPrograms[iOfsPH].iVaddr;
-			inst = m_vMem.GetU32(dwRealOfs);
-			if(rel->type == R_MIPS_HI16)
-			{
-				reg = (inst >> 16) & 0x1F;
-			}
-			else
-			{
-				reg = (inst >> 21) & 0x1F;
-			}
-
-			COutput::Printf(LEVEL_INFO, "Sorted Reloc %s:%-4d Symbol:%-4d Real:%08X Reg:%s:%d\n", 
-					rel->secname, iLoop, 
-					rel->symbol, dwRealOfs, g_szRelTypes[rel->type],reg);
-		}
-	}
-#endif
-
 	pData = NULL;
 	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
 	{
@@ -1585,7 +1553,7 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 			fprintf(fp, "\n");
 		}
 
-		fprintf(fp, "\t%-40s\n", disasmInstruction(LW(pInst[iILoop]), dwAddr, NULL, NULL));
+		fprintf(fp, "\t%-40s\n", disasmInstruction(LW(pInst[iILoop]), dwAddr, NULL, NULL, 0));
 		dwAddr += 4;
 	}
 }
@@ -1670,6 +1638,9 @@ void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
 			}
 		}
 	}
+
+	/* Now that we have probably determined most if not all functions lets makeup 
+	 * some sizes */
 
 	disasmSetSymbols(&syms);
 	disasmSetOpts(disopts, 1);

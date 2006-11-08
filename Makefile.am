@@ -18,6 +18,7 @@ prxtool_SOURCES = \
 	SerializePrxToIdc.C \
 	SerializePrxToXml.C \
 	SerializePrxToMap.C \
+	pspkerror.C \
 	disasm.C \
 	$(TINYXML)/tinyxml.cpp \
 	$(TINYXML)/tinyxmlparser.cpp \
@@ -37,6 +38,7 @@ noinst_HEADERS = \
 	SerializePrxToXml.h \
 	SerializePrxToMap.h \
 	VirtualMem.h \
+	pspkerror.h \
 	disasm.h \
 	$(TINYXML)/tinystr.h \
 	$(TINYXML)/tinyxml.h
