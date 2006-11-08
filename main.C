@@ -64,7 +64,7 @@ static struct option cmd_options[] = {
 	{"impexp", no_argument, 0, 'f'},
 	{"disasm", no_argument, 0, 'w'},
 	{"disopts", required_argument, 0, 'i'},
-	{"disbase", required_argument, 0, 'b'},
+	{"reloc", required_argument, 0, 'r'},
 	{"symbols", no_argument, 0, 'y'},
 	{NULL, 0, 0, 0},
 };
@@ -104,7 +104,7 @@ int process_args(int argc, char **argv)
 	int opt_index = 0;
 	init_args();
 
-	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:b:y", 
+	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:r:y", 
 					cmd_options, &opt_index)) != -1)
 	{
 		switch(ch)
@@ -141,7 +141,7 @@ int process_args(int argc, char **argv)
 					   break;
 			case 'f' : g_outputMode = OUTPUT_IMPEXP;
 					   break;
-			case 'b':  g_dwBase = strtoul(optarg, NULL, 0);
+			case 'r':  g_dwBase = strtoul(optarg, NULL, 0);
 					   break;
 			case 's' : {
 						   int i;
@@ -215,6 +215,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "--symbols,  -y         : Output special symbols file\n");
 	COutput::Printf(LEVEL_INFO, "--disasm,   -w         : Disasm the executable sections of the file\n");
 	COutput::Printf(LEVEL_INFO, "--disopts,  -i [opts]  : A list dissasembler options\n");
+	COutput::Printf(LEVEL_INFO, "--reloc     -r addr    : Relocation the PRX to a different address\n");
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Disassembler Options:\n");
 	COutput::Printf(LEVEL_INFO, "x - Print immediates all in hex (not just appropriate ones\n");
