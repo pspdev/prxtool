@@ -39,6 +39,7 @@ static char **g_ppInfiles;
 static int  g_iInFiles;
 static char *g_pOutfile;
 static char *g_pNamefile;
+static char *g_pFuncfile;
 static bool g_blDebug;
 static OutputMode g_outputMode;
 static u32 g_iSMask;
@@ -66,6 +67,7 @@ static struct option cmd_options[] = {
 	{"disopts", required_argument, 0, 'i'},
 	{"reloc", required_argument, 0, 'r'},
 	{"symbols", no_argument, 0, 'y'},
+	{"funcs", required_argument, 0, 'z'},
 	{NULL, 0, 0, 0},
 };
 
@@ -104,7 +106,7 @@ int process_args(int argc, char **argv)
 	int opt_index = 0;
 	init_args();
 
-	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:r:y", 
+	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:r:z:y", 
 					cmd_options, &opt_index)) != -1)
 	{
 		switch(ch)
@@ -173,6 +175,8 @@ int process_args(int argc, char **argv)
 					   break;
 			case 'y': g_outputMode = OUTPUT_SYMBOLS;
 					  break;
+			case 'z': g_pFuncfile = optarg;
+					  break;
 			case '?':
 			default:
 					   return 0;
@@ -206,6 +210,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "--debug,    -d         : Enable debug mode\n");
 	COutput::Printf(LEVEL_INFO, "--serial,   -s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
 	COutput::Printf(LEVEL_INFO, "--xmlfile,  -n imp.xml : Specify a XML file containing the nid tables\n");
+	COutput::Printf(LEVEL_INFO, "--funcs,    -z funcs   : Specify a function prototype file\n");
 	COutput::Printf(LEVEL_INFO, "--stubs,    -t         : Emit stub files for the XML file passed on the command line\n");
 	COutput::Printf(LEVEL_INFO, "--prxstubs, -u         : Emit stub files based on the exports of the specified prx files\n");
 	COutput::Printf(LEVEL_INFO, "--newstubs, -k         : Emit new style stubs for the SDK\n");
@@ -755,6 +760,10 @@ int main(int argc, char **argv)
 		if(g_pNamefile != NULL)
 		{
 			(void) nids.AddXmlFile(g_pNamefile);
+		}
+		if(g_pFuncfile != NULL)
+		{
+			(void) nids.AddFunctionFile(g_pFuncfile);
 		}
 
 		if(g_outputMode == OUTPUT_ELF)

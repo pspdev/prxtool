@@ -63,6 +63,16 @@ void CNidMgr::FreeMemory()
 	}
 
 	m_pLibHead = NULL;
+
+	for(int i = 0; i < m_funcMap.size(); i++)
+	{
+		FunctionType *p;
+		p = m_funcMap[i];
+		if(p)
+		{
+			delete p;
+		}
+	}
 }
 
 /* Generate a simple name based on the library and the nid */
@@ -374,4 +384,104 @@ const char *CNidMgr::FindDependancy(const char *lib)
 
 	sprintf(szUnknown, "Unknown (%s)", lib);
 	return szUnknown;
+}
+
+static char *strip_whitesp(char *str)
+{
+	int len;
+
+	while(isspace(*str))
+	{
+		str++;
+	}
+
+	len = strlen(str);
+	while((len > 0) && (isspace(str[len-1])))
+	{
+		str[len-1] = 0;
+		len--;
+	}
+
+	if(len == 0)
+	{
+		return NULL;
+	}
+	
+	return str;
+}
+
+bool CNidMgr::AddFunctionFile(const char *szFilename)
+{
+	FILE *fp;
+
+	fp = fopen(szFilename, "r");
+	if(fp)
+	{
+		char line[1024];
+
+		while(fgets(line, sizeof(line), fp))
+		{
+			char *name;
+			char *args = NULL;
+			char *ret = NULL;
+
+			name = strip_whitesp(line);
+			if(name == NULL)
+			{
+				continue;
+			}
+
+			args = strchr(name, '|');
+			if(args)
+			{
+				*args++ = 0;
+				ret = strchr(args, '|');
+				if(ret)
+				{
+					*ret++ = 0;
+				}
+			}
+
+			if((name) && (name[0] != '#'))
+			{
+				FunctionType *p = new FunctionType;
+
+				memset(p, 0, sizeof(FunctionType));
+				snprintf(p->name, FUNCTION_NAME_MAX, "%s", name);
+				if(args)
+				{
+					snprintf(p->args, FUNCTION_ARGS_MAX, "%s", args);
+				}
+				if(ret)
+				{
+					snprintf(p->ret, FUNCTION_RET_MAX, "%s", ret);
+				}
+				m_funcMap.insert(m_funcMap.end(), p);
+				COutput::Printf(LEVEL_DEBUG, "Function: %s %s(%s)\n", p->ret, p->name, p->args);
+			}
+		}
+		fclose(fp);
+		return true;
+	}
+
+	return false;
+}
+
+FunctionType *CNidMgr::FindFunctionType(const char *name)
+{
+	FunctionType *ret = NULL;
+	int i;
+
+	for(i = 0; i < m_funcMap.size(); i++)
+	{
+		FunctionType *p = NULL;
+		p = m_funcMap[i];
+		if((p) && (strcmp(name, p->name) == 0))
+		{
+			ret = p;
+			break;
+		}
+	}
+
+	return ret;
 }

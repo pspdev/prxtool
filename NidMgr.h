@@ -11,9 +11,14 @@
 
 #include "types.h"
 #include <tinyxml/tinyxml.h>
+#include <vector>
 
 #define LIB_NAME_MAX 64
 #define LIB_SYMBOL_NAME_MAX 128
+
+#define FUNCTION_NAME_MAX   128
+#define FUNCTION_ARGS_MAX   128
+#define FUNCTION_RET_MAX    64
 
 /** Structure to hold a single library nid */
 struct LibraryNid
@@ -22,6 +27,14 @@ struct LibraryNid
 	u32 nid;
 	/** The name of the symbol */
 	char name[LIB_SYMBOL_NAME_MAX];
+};
+
+/** Structure to hold a single function entry */
+struct FunctionType
+{
+	char name[FUNCTION_NAME_MAX];
+	char args[FUNCTION_ARGS_MAX];
+	char ret[FUNCTION_RET_MAX];
 };
 
 /** Structure to hold a single library entry */
@@ -50,8 +63,12 @@ struct LibraryEntry
 /** Class to load and manage a list of libraries */
 class CNidMgr
 {
+	typedef std::vector<FunctionType *> FunctionVect;
+
 	/** Head pointer to the list of libraries */
 	LibraryEntry *m_pLibHead;
+	/** Mapping of function names to prototypes */
+	FunctionVect  m_funcMap;
 	/** A buffer to store a pre-generated symbol name so it can be passed to the caller */
 	char m_szCurrName[LIB_SYMBOL_NAME_MAX];
 	/** Generate a name */
@@ -70,6 +87,8 @@ public:
 	const char *FindDependancy(const char *lib);
 	bool AddXmlFile(const char *szFilename);
 	LibraryEntry *GetLibraries(void);
+	bool AddFunctionFile(const char *szFilename);
+	FunctionType *FindFunctionType(const char *name);
 };
 
 #endif

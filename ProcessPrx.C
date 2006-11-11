@@ -918,7 +918,10 @@ void CProcessPrx::BuildSymbols(SymbolMap &syms, u32 dwBase)
 				s = syms[pExport->funcs[iLoop].addr + dwBase];
 				if(s)
 				{
-					s->alias.insert(s->alias.end(), pExport->funcs[iLoop].name);
+					if(strcmp(s->name.c_str(), pExport->funcs[iLoop].name))
+					{
+						s->alias.insert(s->alias.end(), pExport->funcs[iLoop].name);
+					}
 				}
 				else
 				{
@@ -941,7 +944,10 @@ void CProcessPrx::BuildSymbols(SymbolMap &syms, u32 dwBase)
 				s = syms[pExport->vars[iLoop].addr + dwBase];
 				if(s)
 				{
-					s->alias.insert(s->alias.end(), pExport->vars[iLoop].name);
+					if(strcmp(s->name.c_str(), pExport->vars[iLoop].name))
+					{
+						s->alias.insert(s->alias.end(), pExport->vars[iLoop].name);
+					}
 				}
 				else
 				{
@@ -1185,6 +1191,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 			case R_MIPS_26:   {
 								  u32 dwAddr;
 								  u32 dwInst;
+								  ImmEntry *imm;
 
 								  dwInst = LW(*pData);
 								  dwAddr = (dwInst & 0x03FFFFFF) << 2;
@@ -1452,12 +1459,15 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 	u32 iILoop;
 	u32 *pInst;
 	pInst  = (u32*) pData;
+	u32 inst;
 
 	for(iILoop = 0; iILoop < (iSize / 4); iILoop++)
 	{
 		SymbolEntry *s;
+		FunctionType *t;
 		ImmEntry *imm;
 
+		inst = LW(pInst[iILoop]);
 		s = disasmFindSymbol(dwAddr);
 		if(s)
 		{
@@ -1476,6 +1486,11 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 									 fprintf(fp, "%s", s->alias[i].c_str());
 								  }
 								  fprintf(fp, "\n");
+								  t = m_pCurrNidMgr->FindFunctionType(s->name.c_str());
+								  if(t)
+								  {
+									  fprintf(fp, "; Prototype: %s (*)(%s)\n", t->ret, t->args);
+								  }
 								  fprintf(fp, "%s:", s->name.c_str());
 								  break;
 				case SYMBOL_LOCAL: fprintf(fp, "\n");
@@ -1553,7 +1568,26 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 			fprintf(fp, "\n");
 		}
 
-		fprintf(fp, "\t%-40s\n", disasmInstruction(LW(pInst[iILoop]), dwAddr, NULL, NULL, 0));
+		/* Check if this is a jump */
+		if((inst & 0xFC000000) == 0x0C000000)
+		{
+			u32 dwJump = (inst & 0x03FFFFFF) << 2;
+			SymbolEntry *s;
+			FunctionType *t;
+			dwJump |= (dwBase & 0xF0000000);
+
+			s = disasmFindSymbol(dwJump);
+			if(s)
+			{
+				t = m_pCurrNidMgr->FindFunctionType(s->name.c_str());
+				if(t)
+				{
+					fprintf(fp, "; Call - %s %s(%s)\n", t->ret, t->name, t->args);
+				}
+			}
+		}
+
+		fprintf(fp, "\t%-40s\n", disasmInstruction(inst, dwAddr, NULL, NULL, 0));
 		dwAddr += 4;
 	}
 }
