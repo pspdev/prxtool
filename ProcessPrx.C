@@ -1191,7 +1191,6 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 			case R_MIPS_26:   {
 								  u32 dwAddr;
 								  u32 dwInst;
-								  ImmEntry *imm;
 
 								  dwInst = LW(*pData);
 								  dwAddr = (dwInst & 0x03FFFFFF) << 2;

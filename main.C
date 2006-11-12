@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <cassert>
 #include <getopt.h>
+#include <sys/stat.h>
 #include "SerializePrxToIdc.h"
 #include "SerializePrxToXml.h"
 #include "SerializePrxToMap.h"
@@ -46,6 +47,8 @@ static u32 g_iSMask;
 static int g_newstubs;
 static u32 g_dwBase;
 static const char *g_disopts = "";
+static char g_namepath[PATH_MAX];
+static char g_funcpath[PATH_MAX];
 
 static struct option cmd_options[] = {
 	{"output", required_argument, 0, 'o'},
@@ -88,23 +91,43 @@ void DoOutput(OutputLevel level, const char *str)
 	};
 }
 
-void init_args()
+void init_arguments()
 {
+	const char *home;
+
 	g_ppInfiles = NULL;
 	g_iInFiles = 0;
 	g_pOutfile = NULL;
-	g_pNamefile = NULL;
 	g_blDebug = false;
 	g_outputMode = OUTPUT_IDC;
 	g_iSMask = SERIALIZE_ALL & ~SERIALIZE_SECTIONS;
 	g_newstubs = 0;
+
+	memset(g_namepath, 0, sizeof(g_namepath));
+	memset(g_funcpath, 0, sizeof(g_funcpath));
+	home = getenv("HOME");
+	if(home)
+	{
+		struct stat s;
+
+		snprintf(g_namepath, sizeof(g_namepath), "%s/.prxtool/psplibdoc.xml", home);
+		if(stat(g_namepath, &s) == 0)
+		{
+			g_pNamefile = g_namepath;
+		}
+		snprintf(g_funcpath, sizeof(g_funcpath), "%s/.prxtool/functions.txt", home);
+		if(stat(g_funcpath, &s) == 0)
+		{
+			g_pFuncfile = g_funcpath;
+		}
+	}
 }
 
 int process_args(int argc, char **argv)
 {
 	int ch;
 	int opt_index = 0;
-	init_args();
+	init_arguments();
 
 	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:r:z:y", 
 					cmd_options, &opt_index)) != -1)

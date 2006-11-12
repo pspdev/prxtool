@@ -64,7 +64,7 @@ void CNidMgr::FreeMemory()
 
 	m_pLibHead = NULL;
 
-	for(int i = 0; i < m_funcMap.size(); i++)
+	for(unsigned int i = 0; i < m_funcMap.size(); i++)
 	{
 		FunctionType *p;
 		p = m_funcMap[i];
@@ -470,9 +470,8 @@ bool CNidMgr::AddFunctionFile(const char *szFilename)
 FunctionType *CNidMgr::FindFunctionType(const char *name)
 {
 	FunctionType *ret = NULL;
-	int i;
 
-	for(i = 0; i < m_funcMap.size(); i++)
+	for(unsigned int i = 0; i < m_funcMap.size(); i++)
 	{
 		FunctionType *p = NULL;
 		p = m_funcMap[i];
