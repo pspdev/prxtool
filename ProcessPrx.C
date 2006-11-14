@@ -1203,10 +1203,17 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 							  break;
 			case R_MIPS_32:   {
 								  u32 dwData;
+								  ImmEntry *imm;
 
 								  dwData = LW(*pData);
 								  dwData += dwCurrBase;
 								  SW(*pData, dwData);
+
+								  imm = new ImmEntry;
+								  imm->addr = dwRealOfs + dwBase;
+								  imm->target = dwData;
+								  imm->text = ElfAddrIsText(dwData - dwBase);
+								  imms[dwRealOfs + dwBase] = imm;
 							  }
 							  break;
 			default: /* Do nothing */
