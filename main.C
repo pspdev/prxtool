@@ -26,7 +26,6 @@ enum OutputMode
 	OUTPUT_MAP = 2,
 	OUTPUT_XML = 3,
 	OUTPUT_ELF = 4,
-	OUTPUT_PRX = 5,
 	OUTPUT_STUB = 6,
 	OUTPUT_DEP = 7,
 	OUTPUT_MOD = 8,
@@ -55,7 +54,6 @@ static struct option cmd_options[] = {
 	{"idcout", no_argument, 0, 'c'},
 	{"mapout", no_argument, 0, 'a'},
 	{"xmlout", no_argument, 0, 'x'},
-	{"prxout", no_argument, 0, 'p'},
 	{"elfout", no_argument, 0, 'e'},
 	{"debug", no_argument, 0, 'd'},
 	{"serial", required_argument, 0, 's'},
@@ -102,6 +100,7 @@ void init_arguments()
 	g_outputMode = OUTPUT_IDC;
 	g_iSMask = SERIALIZE_ALL & ~SERIALIZE_SECTIONS;
 	g_newstubs = 0;
+	g_dwBase = 0;
 
 	memset(g_namepath, 0, sizeof(g_namepath));
 	memset(g_funcpath, 0, sizeof(g_funcpath));
@@ -129,7 +128,7 @@ int process_args(int argc, char **argv)
 	int opt_index = 0;
 	init_arguments();
 
-	while((ch = getopt_long(argc, argv, "o:caxpeds:n:tukqmfwi:r:z:y", 
+	while((ch = getopt_long(argc, argv, "o:caxeds:n:tukqmfwi:r:z:y", 
 					cmd_options, &opt_index)) != -1)
 	{
 		switch(ch)
@@ -137,8 +136,6 @@ int process_args(int argc, char **argv)
 			case 'd': g_blDebug = true;
 					  break;
 			case 'x' : g_outputMode = OUTPUT_XML;
-					   break;
-			case 'p' : g_outputMode = OUTPUT_PRX;
 					   break;
 			case 'e' : g_outputMode = OUTPUT_ELF;
 					   break;
@@ -228,8 +225,7 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "--idcout,   -c         : Output an IDC file (default)\n");
 	COutput::Printf(LEVEL_INFO, "--mapout,   -a         : Output a MAP file\n");
 	COutput::Printf(LEVEL_INFO, "--xmlout,   -x         : Output an XML file\n");
-	COutput::Printf(LEVEL_INFO, "--prxout,   -p         : Output a PRX/PFX (from an ELF)\n");
-	COutput::Printf(LEVEL_INFO, "--elfout,   -e         : Output an ELF (from a PRX)\n");
+	COutput::Printf(LEVEL_INFO, "--elfout,   -e         : Output an ELF from a PRX\n");
 	COutput::Printf(LEVEL_INFO, "--debug,    -d         : Enable debug mode\n");
 	COutput::Printf(LEVEL_INFO, "--serial,   -s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
 	COutput::Printf(LEVEL_INFO, "--xmlfile,  -n imp.xml : Specify a XML file containing the nid tables\n");
@@ -256,7 +252,7 @@ void print_help()
 
 void output_elf(const char *file, FILE *out_fp)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	if(prx.LoadFromFile(file) == false)
@@ -268,24 +264,6 @@ void output_elf(const char *file, FILE *out_fp)
 		if(prx.PrxToElf(out_fp) == false)
 		{
 			COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up ELF\n");
-		}
-	}
-}
-
-void output_prx(const char *file, FILE *out_fp)
-{
-	CProcessPrx prx;
-
-	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
-	if(prx.LoadFromFile(file) == false)
-	{
-		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures\n");
-	}
-	else
-	{
-		if(prx.ElfToPrx(out_fp) == false)
-		{
-			COutput::Puts(LEVEL_ERROR, "Failed to create a fixed up PRX\n");
 		}
 	}
 }
@@ -302,7 +280,7 @@ int compare_symbols(const void *left, const void *right)
 
 void output_symbols(const char *file, FILE *out_fp)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	if(prx.LoadFromFile(file) == false)
@@ -384,7 +362,7 @@ void output_symbols(const char *file, FILE *out_fp)
 
 void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	prx.SetNidMgr(nids);
@@ -394,13 +372,13 @@ void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 	}
 	else
 	{
-		prx.Dump(false, out_fp, g_disopts, g_dwBase);
+		prx.Dump(out_fp, g_disopts);
 	}
 }
 
 void serialize_file(const char *file, CSerializePrx *pSer, CNidMgr *pNids)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	assert(pSer != NULL);
 
@@ -418,7 +396,7 @@ void serialize_file(const char *file, CSerializePrx *pSer, CNidMgr *pNids)
 
 void output_mods(const char *file, CNidMgr *pNids)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	prx.SetNidMgr(pNids);
 	if(prx.LoadFromFile(file) == false)
@@ -461,12 +439,11 @@ void output_mods(const char *file, CNidMgr *pNids)
 		}
 
 	}
-
 }
 
 void output_importexport(const char *file, CNidMgr *pNids)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 	int iLoop;
 
 	prx.SetNidMgr(pNids);
@@ -559,7 +536,7 @@ void output_importexport(const char *file, CNidMgr *pNids)
 
 void output_deps(const char *file, CNidMgr *pNids)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	prx.SetNidMgr(pNids);
 	if(prx.LoadFromFile(file) == false)
@@ -659,7 +636,7 @@ void write_stub_new(const char *szDirectory, PspLibExport *pExp)
 
 void output_stubs_prx(const char *file, CNidMgr *pNids)
 {
-	CProcessPrx prx;
+	CProcessPrx prx(g_dwBase);
 
 	prx.SetNidMgr(pNids);
 	if(prx.LoadFromFile(file) == false)
@@ -754,7 +731,6 @@ int main(int argc, char **argv)
 			switch(g_outputMode)
 			{
 				case OUTPUT_ELF :
-				case OUTPUT_PRX :
 					out_fp = fopen(g_pOutfile, "wb");
 					break;
 				default:
@@ -792,10 +768,6 @@ int main(int argc, char **argv)
 		if(g_outputMode == OUTPUT_ELF)
 		{
 			output_elf(g_ppInfiles[0], out_fp);
-		}
-		else if(g_outputMode == OUTPUT_PRX)
-		{
-			output_prx(g_ppInfiles[0], out_fp);
 		}
 		else if(g_outputMode == OUTPUT_STUB)
 		{

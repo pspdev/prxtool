@@ -40,12 +40,13 @@ static const char* g_szRelTypes[13] =
 /* Minimum string size */
 #define MINIMUM_STRING 4
 
-CProcessPrx::CProcessPrx()
+CProcessPrx::CProcessPrx(u32 dwBase)
 	: CProcessElf()
 	, m_defNidMgr()
 	, m_pCurrNidMgr(&m_defNidMgr)
 	, m_pElfRelocs(NULL)
 	, m_iRelocCount(0)
+	, m_dwBase(dwBase)
 {
 	memset(&m_modInfo, 0, sizeof(PspModule));
 	m_blPrxLoaded = false;
@@ -89,6 +90,8 @@ void CProcessPrx::FreeMemory()
 
 	/* Check the import and export lists and free */
 	memset(&m_modInfo, 0, sizeof(PspModule));
+	FreeSymbols(m_syms);
+	FreeImms(m_imms);
 }
 
 int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
@@ -587,6 +590,7 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 				COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
 				blRet = true;
 				m_blPrxLoaded = true;
+				BuildMaps();
 			}
 		}
 	}
@@ -616,171 +620,151 @@ void CProcessPrx::SetNidMgr(CNidMgr* nidMgr)
 	}
 }
 
-bool CProcessPrx::PrxToElf(FILE *fp)
+void CProcessPrx::CalcElfSize(size_t &iTotal, size_t &iSectCount, size_t &iStrSize)
 {
-	u8 *pElfCopy;
-	Elf32_Ehdr* pHeader;
-	ElfSection* pDataSect;
-	ElfSection* pTextSect;
+	int i;
+	int iBinBase;
 
-	/* Fixup the elf file and output it to fp */
-	if((fp == NULL) || (m_blPrxLoaded == false))
+	/* Sect count 2 for NULL and string sections */
+	iSectCount = 2;
+	iTotal = 0;
+	/* 1 for NUL for NULL section */
+	iStrSize = 2 + strlen(".shstrtab"); 
+	iBinBase = 0;
+
+	for(i = 1; i < m_iSHCount; i++)
 	{
-		return false;
-	}
-
-	/* Uber hacks */
-	pDataSect = ElfFindSection(".data");
-	if(pDataSect == NULL)
-	{
-		return false;
-	}
-
-	pTextSect = ElfFindSection(".text");
-	if(pTextSect == NULL)
-	{
-		return false;
-	}
-
-	pElfCopy = new u8[m_iElfSize];
-	if(pElfCopy == NULL)
-	{
-		return false;
-	}
-	memcpy(pElfCopy, m_pElf, m_iElfSize);
-
-	/* Patch header */
-	pHeader = (Elf32_Ehdr*) pElfCopy;
-	SH(pHeader->e_type, ELF_MIPS_TYPE);
-
-	/* Check for relocs */
-	if(m_pElfRelocs != NULL)
-	{
-		int iLoop;
-		u32 iVal;
-		u32 *pData;
-		u32 *pData_HiAddr;
-		bool blHiSet = false;
-		/* Pointer to the base address for read/writing */
-		u8  *pBase;
-		u32 iBaseSize;
-		u32 iBaseAddr;
-		/* Any relocs with symbol & 256 fixup to base of .data */
-
-		pData = NULL;
-		pData_HiAddr = NULL;
-		iLoop = 0;
-		for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
+		if(m_pElfSections[i].iFlags & SHF_ALLOC)
 		{
-			if(m_pElfRelocs[iLoop].symbol & RELOC_OFS_DATA)
-			{
-				pBase = pElfCopy + pDataSect->iOffset;
-				iBaseSize = pDataSect->iSize;
-				/* Offset for data seems to be based from start of data */
-				iBaseAddr = 0;
-			}
-			else
-			{
-				pBase = pElfCopy + pTextSect->iOffset;
-				iBaseSize = pTextSect->iSize;
-				/* Offset for text seems to be based from start of program */
-				iBaseAddr = pTextSect->iAddr;
-			}
-
-			/* Not worth the effort to properly fix up the symbols */
-			if((m_pElfRelocs[iLoop].symbol & RELOC_REL_DATA) && (m_pElfRelocs[iLoop].offset < iBaseSize))
-			{
-				switch(m_pElfRelocs[iLoop].type)
-				{
-					case R_MIPS_HI16 : pData_HiAddr = (u32*) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
-									   blHiSet = false;
-									   COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", 
-											   iLoop, m_pElfRelocs[iLoop].offset);
-									break;
-					case R_MIPS_LO16 : 	if(pData_HiAddr != NULL)
-										{
-											u32 hiinst;
-											u32 loinst;
-											u32 addr;
-											int ori = 0;
-
-											pData = (u32*) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
-										    COutput::Printf(LEVEL_DEBUG, "Reloc %d Ofs %08X\n", 
-												   iLoop, m_pElfRelocs[iLoop].offset);
-											hiinst = LW(*pData_HiAddr);
-											loinst = LW(*pData);
-											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", 
-													iLoop, hiinst, loinst);
-
-											/* Make the guess that this only occurs on text sections */
-											addr = (hiinst & 0xFFFF) << 16;
-											/* ori */
-											if((loinst >> 26) == 0XD)
-											{
-												COutput::Printf(LEVEL_DEBUG, "ori\n");
-												addr = addr | (loinst & 0xFFFF);
-
-												ori = 1;
-											}
-											else
-											{
-												/* Do signed addition */
-												addr = (s32) addr + (s16) (loinst & 0xFFFF);
-											}
-
-											COutput::Printf(LEVEL_DEBUG, "%d: Address %08X\n", iLoop, addr);
-											addr += pDataSect->iAddr;
-											COutput::Printf(LEVEL_DEBUG, "%d: Address %08X\n", iLoop, addr);
-
-											if((addr & 0x8000) && (!blHiSet) && (!ori))
-											{
-												addr += 0x10000;
-												blHiSet = true;
-											}
-
-											loinst &= ~0xFFFF;
-											loinst |= (addr & 0xFFFF);
-											hiinst &= ~0xFFFF;
-											hiinst |= ((addr >> 16) & 0xFFFF);
-
-											COutput::Printf(LEVEL_DEBUG, "%d: hi %08X, lo %08X\n", iLoop, hiinst, loinst);
-											SW(*pData_HiAddr, hiinst);
-											SW(*pData, loinst);
-										}
-										else
-										{
-											COutput::Printf(LEVEL_DEBUG, "No matching HIADDR for reloc %d\n", iLoop);
-										}
-
-									break;
-					case R_MIPS_32 : 	pData = (u32 *) (pBase + m_pElfRelocs[iLoop].offset - iBaseAddr);
-										iVal = LW(*pData);
-										iVal += pDataSect->iAddr;
-										SW(*pData, iVal);
-										break;
-					default:		COutput::Printf(LEVEL_DEBUG, "Unsupported relocation type:%d\n", m_pElfRelocs[iLoop].type);
-									break;
-				};
-			}
+			iSectCount++;
+			iStrSize += strlen(m_pElfSections[i].szName) + 1;
 		}
 	}
 
-	fwrite(pElfCopy, 1, m_iElfSize, fp);
-	fflush(fp);
+	iTotal = sizeof(Elf32_Ehdr) + (sizeof(Elf32_Shdr)*iSectCount) + iStrSize;
+}
 
-	delete pElfCopy;
+bool CProcessPrx::OutputElfHeader(FILE *fp, size_t iSectCount)
+{
+	Elf32_Ehdr hdr;
+
+	memset(&hdr, 0, sizeof(hdr));
+	SW(hdr.e_magic, ELF_MAGIC);
+	hdr.e_class = 1;
+	hdr.e_data = 1;
+	hdr.e_idver = 1;
+	SH(hdr.e_type, ELF_MIPS_TYPE);
+	SH(hdr.e_machine, 8); 
+	SW(hdr.e_version, 1);
+	SW(hdr.e_entry, m_dwBase + m_elfHeader.iEntry); 
+	SW(hdr.e_phoff, 0);
+	SW(hdr.e_shoff, sizeof(Elf32_Ehdr));
+	SW(hdr.e_flags, 0x10a23001);
+	SH(hdr.e_ehsize, sizeof(Elf32_Ehdr));
+	SH(hdr.e_phentsize, sizeof(Elf32_Phdr));
+	SH(hdr.e_phnum, 0);
+	SH(hdr.e_shentsize, sizeof(Elf32_Shdr));
+	SH(hdr.e_shnum, iSectCount);
+	SH(hdr.e_shstrndx, iSectCount-1);
+
+	if(fwrite(&hdr, 1, sizeof(hdr), fp) != sizeof(hdr))
+	{
+		return false;
+	}
 
 	return true;
 }
 
-bool CProcessPrx::ElfToPrx(FILE *fp)
+bool CProcessPrx::OutputSections(FILE *fp, size_t iElfHeadSize, size_t iSectCount, size_t iStrSize)
 {
-	u8 *pElfCopy;
-	Elf32_Shdr* pSection;
-	Elf32_Phdr* pProgram;
-	Elf32_Ehdr* pHeader;
-	ElfSection* pModInfoSect;
-	int iLoop;
+	Elf32_Shdr shdr;
+	size_t iStrPointer = 1;
+	size_t iBinBase;
+	int i;
+	char *pStrings;
+
+	pStrings = new char[iStrSize];
+	if(pStrings == NULL)
+	{
+		return false;
+	}
+	memset(pStrings, 0, iStrSize);
+
+	iBinBase = (iElfHeadSize + 15) & ~15;
+	memset(&shdr, 0, sizeof(shdr));
+	/* Write NULL section */
+	if(fwrite(&shdr, 1, sizeof(shdr), fp) != sizeof(shdr))
+	{
+		return false;
+	}
+
+	for(i = 1; i < m_iSHCount; i++)
+	{
+		if(m_pElfSections[i].iFlags & SHF_ALLOC)
+		{
+			SW(shdr.sh_name, iStrPointer);
+			SW(shdr.sh_type, m_pElfSections[i].iType);
+			SW(shdr.sh_flags, m_pElfSections[i].iFlags);
+			SW(shdr.sh_addr, m_pElfSections[i].iAddr + m_dwBase);
+			if(m_pElfSections[i].iType == SHT_NOBITS)
+			{
+				SW(shdr.sh_offset, iBinBase + m_iElfSize);
+			}
+			else
+			{
+				SW(shdr.sh_offset, iBinBase + m_pElfSections[i].iAddr);
+			}
+			SW(shdr.sh_size, m_pElfSections[i].iSize);
+			SW(shdr.sh_link, 0);
+			SW(shdr.sh_info, 0);
+			SW(shdr.sh_addralign, m_pElfSections[i].iAddralign);
+			SW(shdr.sh_entsize, 0);
+			if(fwrite(&shdr, 1, sizeof(shdr), fp) != sizeof(shdr))
+			{
+				return false;
+			}
+			strcpy(&pStrings[iStrPointer], m_pElfSections[i].szName);
+			iStrPointer += strlen(m_pElfSections[i].szName) + 1;
+		}
+	}
+
+	/* Write string section */
+	SW(shdr.sh_name, iStrPointer);
+	SW(shdr.sh_type, SHT_STRTAB);
+	SW(shdr.sh_flags, 0);
+	SW(shdr.sh_addr, 0);
+	SW(shdr.sh_offset, sizeof(Elf32_Ehdr) + (sizeof(Elf32_Shdr)*iSectCount));
+	SW(shdr.sh_size, iStrSize);
+	SW(shdr.sh_link, 0);
+	SW(shdr.sh_info, 0);
+	SW(shdr.sh_addralign, 1);
+	SW(shdr.sh_entsize, 0);
+	if(fwrite(&shdr, 1, sizeof(shdr), fp) != sizeof(shdr))
+	{
+		return false;
+	}
+
+	strcpy(&pStrings[iStrPointer], ".shstrtab");
+	iStrPointer += strlen(".shstrtab") + 1;
+
+	assert(iStrSize == iStrPointer);
+
+	if(fwrite(pStrings, 1, iStrSize, fp) != (unsigned) iStrSize)
+	{
+		return false;
+	}
+
+	delete pStrings;
+
+	return true;
+}
+
+bool CProcessPrx::PrxToElf(FILE *fp)
+{
+	size_t iElfHeadSize = 0;
+	size_t iSectCount = 0;
+	size_t iStrSize = 0;
+	size_t iAlign = 0;
 
 	/* Fixup the elf file and output it to fp */
 	if((fp == NULL) || (m_blPrxLoaded == false))
@@ -788,89 +772,42 @@ bool CProcessPrx::ElfToPrx(FILE *fp)
 		return false;
 	}
 
-	if((m_elfHeader.iPhnum < 1) || (m_elfHeader.iPhentsize == 0) || (m_elfHeader.iPhoff == 0))
+	CalcElfSize(iElfHeadSize, iSectCount, iStrSize);
+	COutput::Printf(LEVEL_INFO, "size: %d, sectcount: %d, strsize: %d\n", iElfHeadSize, iSectCount, iStrSize);
+	if(!OutputElfHeader(fp, iSectCount))
 	{
-		COutput::Puts(LEVEL_ERROR, "Invalid program header data\n");
+		COutput::Printf(LEVEL_INFO, "Could not write ELF header\n");
 		return false;
 	}
 
-	pModInfoSect = ElfFindSection(".rodata.sceModuleInfo");
-	if(pModInfoSect == NULL)
+	if(!OutputSections(fp, iElfHeadSize, iSectCount, iStrSize))
 	{
-		COutput::Puts(LEVEL_ERROR, "Could not find the module info section\n");
+		COutput::Printf(LEVEL_INFO, "Could not write ELF sections\n");
 		return false;
 	}
 
-	pElfCopy = new u8[m_iElfSize];
-	if(pElfCopy == NULL)
+	/* Align data size */
+	iAlign = iElfHeadSize & 15;
+	if(iAlign > 0)
 	{
-		return false;
-	}
-	memcpy(pElfCopy, m_pElf, m_iElfSize);
+		char align[16];
 
-	pHeader = (Elf32_Ehdr*) pElfCopy;
-	SH(pHeader->e_type, ELF_PRX_TYPE);
-
-	/* Hack the program headers */
-	pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff);
-	if(m_modInfo.info.flags & 0x1000)
-	{
-		SW(pProgram->p_paddr, 0x80000000 | pModInfoSect->iOffset);
-	}
-	else
-	{
-		SW(pProgram->p_paddr, pModInfoSect->iOffset);
-	}
-	SW(pProgram->p_flags, 5);
-
-	if(m_elfHeader.iPhnum > 1)
-	{
-		pProgram = (Elf32_Phdr*) (pElfCopy + m_elfHeader.iPhoff + m_elfHeader.iPhentsize);
-		SW(pProgram->p_paddr, 0);
-		SW(pProgram->p_flags, 6);
-	}
-
-	/* Let's do a quick a dirty hack on the relocation tables */
-	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
-	{
-		/* Only modify normal elf relocation tables */
-		if(m_pElfSections[iLoop].iType == SHT_REL)
+		iAlign = 16 - iAlign;
+		memset(align, 0, sizeof(align));
+		if(fwrite(align, 1, iAlign, fp) != iAlign)
 		{
-			u32 iRelLoop;
-			Elf32_Rel *reloc;
-
-			reloc = (Elf32_Rel*) (pElfCopy + m_pElfSections[iLoop].iOffset);
-			for(iRelLoop = 0; iRelLoop < (m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel)); iRelLoop++)
-			{
-				unsigned int info;
-				info = LW(reloc->r_info);
-				SW(reloc->r_info, info & 0xFF);
-				reloc++;
-			}
+			COutput::Printf(LEVEL_INFO, "Could not write alignment\n");
+			return false;
 		}
 	}
 
-	if((m_elfHeader.iShoff > 0) && (m_elfHeader.iShnum > 0) && (m_elfHeader.iShentsize > 0))
+	if(fwrite(m_pElfBin, 1, m_iElfSize, fp) != m_iElfSize)
 	{
-		u32 i;
-		pSection = (Elf32_Shdr*) (pElfCopy + m_elfHeader.iShoff);
-
-		for(i = 0; i < m_elfHeader.iShnum; i++)
-		{
-			if(LW(pSection->sh_type) == SHT_REL)
-			{
-				SW(pSection->sh_type, SHT_PRXRELOC);
-			}
-
-			pSection = (Elf32_Shdr*) (((unsigned char *) pSection) + m_elfHeader.iShentsize);
-		}
+		COutput::Printf(LEVEL_INFO, "Could not write out binary image\n");
+		return false;
 	}
 
-
-	fwrite(pElfCopy, 1, m_iElfSize, fp);
 	fflush(fp);
-
-	delete pElfCopy;
 
 	return true;
 }
@@ -1598,38 +1535,36 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 	}
 }
 
-void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
+bool CProcessPrx::BuildMaps()
 {
 	int iLoop;
-	SymbolMap syms;
-	ImmMap imms;
 
 	if(m_pElfRelocs)
 	{
-		FixupRelocs(dwBase, imms);
+		FixupRelocs(m_dwBase, m_imms);
 	}
 	else
 	{
 		/* If no relocs assume it isn't relocatable :P */
-		dwBase = 0;
+		m_dwBase = 0;
 	}
-	BuildSymbols(syms, dwBase);
+	BuildSymbols(m_syms, m_dwBase);
 
-	ImmMap::iterator start = imms.begin();
-	ImmMap::iterator end = imms.end();
+	ImmMap::iterator start = m_imms.begin();
+	ImmMap::iterator end = m_imms.end();
 
 	while(start != end)
 	{
 		ImmEntry *imm;
 		u32 inst;
 
-		imm = imms[(*start).first];
-		inst = m_vMem.GetU32(imm->target - dwBase);
+		imm = m_imms[(*start).first];
+		inst = m_vMem.GetU32(imm->target - m_dwBase);
 		if(imm->text)
 		{
 			SymbolEntry *s;
 
-			s = syms[imm->target];
+			s = m_syms[imm->target];
 			if(s == NULL)
 			{
 				s = new SymbolEntry;
@@ -1649,7 +1584,7 @@ void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
 				s->size = 0;
 				s->refs.insert(s->refs.end(), imm->addr);
 				s->name = name;
-				syms[imm->target] = s;
+				m_syms[imm->target] = s;
 			}
 			else
 			{
@@ -1673,40 +1608,44 @@ void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
 
 			for(iILoop = 0; iILoop < (m_pElfSections[iLoop].iSize / 4); iILoop++)
 			{
-				disasmAddBranchSymbols(LW(pInst[iILoop]), dwAddr + dwBase, syms);
+				disasmAddBranchSymbols(LW(pInst[iILoop]), dwAddr + m_dwBase, m_syms);
 				dwAddr += 4;
 			}
 		}
 	}
 
-	/* Now that we have probably determined most if not all functions lets makeup 
-	 * some sizes */
+	return true;
+}
 
-	disasmSetSymbols(&syms);
+void CProcessPrx::Dump(FILE *fp, const char *disopts)
+{
+	int iLoop;
+
+	disasmSetSymbols(&m_syms);
 	disasmSetOpts(disopts, 1);
 
 	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 	{
-		if((m_pElfSections[iLoop].iFlags & (SHF_EXECINSTR | SHF_ALLOC)) || (blAll))
+		if(m_pElfSections[iLoop].iFlags & (SHF_EXECINSTR | SHF_ALLOC))
 		{
-			if(((m_pElfSections[iLoop].iSize > 0) && (m_pElfSections[iLoop].iType == SHT_PROGBITS)) || blAll)
+			if((m_pElfSections[iLoop].iSize > 0) && (m_pElfSections[iLoop].iType == SHT_PROGBITS))
 			{
 				fprintf(fp, "\n; ==== Section %s - Address 0x%08X Size 0x%08X Flags 0x%04X\n", 
-						m_pElfSections[iLoop].szName, m_pElfSections[iLoop].iAddr + dwBase, 
+						m_pElfSections[iLoop].szName, m_pElfSections[iLoop].iAddr + m_dwBase, 
 						m_pElfSections[iLoop].iSize, m_pElfSections[iLoop].iFlags);
 				if(m_pElfSections[iLoop].iFlags & SHF_EXECINSTR)
 				{
-					Disasm(fp, m_pElfSections[iLoop].iAddr + dwBase, 
+					Disasm(fp, m_pElfSections[iLoop].iAddr + m_dwBase, 
 							m_pElfSections[iLoop].iSize, 
 							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr),
-							imms, dwBase);
+							m_imms, m_dwBase);
 				}
 				else
 				{
-					DumpData(fp, m_pElfSections[iLoop].iAddr + dwBase, 
+					DumpData(fp, m_pElfSections[iLoop].iAddr + m_dwBase, 
 							m_pElfSections[iLoop].iSize,
 							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr));
-					DumpStrings(fp, m_pElfSections[iLoop].iAddr + dwBase, 
+					DumpStrings(fp, m_pElfSections[iLoop].iAddr + m_dwBase, 
 							m_pElfSections[iLoop].iSize, 
 							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr));
 				}
@@ -1715,6 +1654,4 @@ void CProcessPrx::Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase)
 	}
 
 	disasmSetSymbols(NULL);
-	FreeSymbols(syms);
-	FreeImms(imms);
 }

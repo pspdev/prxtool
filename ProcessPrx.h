@@ -26,6 +26,9 @@ class CProcessPrx : public CProcessElf
 	ElfReloc  *m_pElfRelocs;
 	/* Number of relocations */
 	int m_iRelocCount;
+	ImmMap m_imms;
+	SymbolMap m_syms;
+	u32 m_dwBase;
 
 	bool FillModule(ElfSection *pInfoSect);
 	void FreeMemory();
@@ -34,6 +37,7 @@ class CProcessPrx : public CProcessElf
 	int  LoadSingleExport(PspModuleExport *pExport, u32 addr);
 	bool LoadExports();
 	bool LoadRelocs();
+	bool BuildMaps();
 	void BuildSymbols(SymbolMap &syms, u32 dwBase);
 	void FreeSymbols(SymbolMap &syms);
 	void FreeImms(ImmMap &imms);
@@ -42,13 +46,15 @@ class CProcessPrx : public CProcessElf
 	void DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
 	void DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
 	void Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase);
+	void CalcElfSize(size_t &iTotal, size_t &iSectCount, size_t &iStrSize);
+	bool OutputElfHeader(FILE *fp, size_t iSectCount);
+	bool OutputSections(FILE *fp, size_t iElfHeadSize, size_t iSectCount, size_t iStrSize);
 public:
-	CProcessPrx();
+	CProcessPrx(u32 dwBase);
 	virtual ~CProcessPrx();
 	virtual bool LoadFromFile(const char *szFilename);
 
 	bool PrxToElf(FILE *fp);
-	bool ElfToPrx(FILE *fp);
 
 	PspModule* GetModuleInfo();
 	ElfReloc* GetRelocs(int &iCount);
@@ -56,7 +62,7 @@ public:
 	PspLibImport *GetImports();
 	PspLibExport *GetExports();
 	void SetNidMgr(CNidMgr* nidMgr);
-	void Dump(bool blAll, FILE *fp, const char *disopts, u32 dwBase);
+	void Dump(FILE *fp, const char *disopts);
 };
 
 #endif
