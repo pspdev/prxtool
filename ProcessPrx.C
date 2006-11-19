@@ -1263,13 +1263,14 @@ void CProcessPrx::DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData
 
 #define ISSPACE(x) ((x) == '\t' || (x) == '\r' || (x) == '\n' || (x) == '\v' || (x) == '\f')
 
-bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode)
+bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode, u32 *dwRet)
 {
 	int i;
 	std::string curr = "";
 	int iSize = m_vMem.GetSize(dwAddr);
 	unsigned int ch;
 	bool blRet = false;
+	int iRealLen = 0;
 
 	if(unicode)
 	{
@@ -1297,35 +1298,50 @@ bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode)
 			dwAddr += 2;
 		}
 
-		if((ch > 0) && (ch < 127))
+		if(ISSPACE(ch) || ((ch >= 32) && (ch < 127)))
 		{
 			if((ch >= 32) && (ch < 127))
 			{
 				curr += (unsigned char) ch;
+				iRealLen++;
 			}
-			else if(ISSPACE(ch))
+			else
 			{
+				const char *temp = NULL;
+
 				switch(ch)
 				{
-					case '\t': curr += "\\t";
+					case '\t': temp = "\\t";
 							   break;
-					case '\r': curr += "\\r";
-									   break;
-					case '\n': curr += "\\n";
+					case '\r': temp = "\\r";
 							   break;
-					case '\v': curr += "\\v";
+					case '\n': temp = "\\n";
 							   break;
-					case '\f': curr += "\\f";
+					case '\v': temp = "\\v";
 							   break;
-					default: break;
-					};
+					case '\f': temp = "\\f";
+							   break;
+					default:   break;
+				};
+
+				if(temp)
+				{
+					curr += temp;
+					iRealLen++;
+				}
 			}
 		}
 		else
 		{
-			if(curr.length() >= MINIMUM_STRING)
+			if((ch == 0) && (iRealLen >= MINIMUM_STRING))
 			{
 				blRet = true;
+
+				if(dwRet)
+				{
+					*dwRet = dwAddr;
+				}
+
 				if(unicode)
 				{
 					str = "L\"" + curr + "\"";
@@ -1344,56 +1360,31 @@ bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode)
 
 void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData)
 {
-	u32 i;
 	std::string curr = "";
 	int iPrintHead = 0;
-	u32 dwRealLen = 0;
+	u32 dwNext;
+	u32 dwEnd;
 
-	for(i = 0; i < iSize; i++)
+	if(iSize > MINIMUM_STRING)
 	{
-		if(pData[i] > 0)
+		dwEnd = dwAddr + iSize - MINIMUM_STRING;
+		while(dwAddr < dwEnd)
 		{
-			if((pData[i] >= 32) && (pData[i] < 127))
+			if(ReadString(dwAddr, curr, false, &dwNext) || ReadString(dwAddr, curr, true, &dwNext))
 			{
-				curr += pData[i];
-			}
-			else if(ISSPACE(pData[i]))
-			{
-				switch(pData[i])
+				if(iPrintHead == 0)
 				{
-					case '\t': curr += "\\t";
-							   break;
-					case '\r': curr += "\\r";
-									   break;
-					case '\n': curr += "\\n";
-							   break;
-					case '\v': curr += "\\v";
-							   break;
-					case '\f': curr += "\\f";
-							   break;
-					default: break;
-				};
-			}
-			dwRealLen++;
-		}
-		else
-		{
-			if(!curr.empty())
-			{
-				if(curr.length() >= MINIMUM_STRING)
-				{
-					if(iPrintHead == 0)
-					{
-						fprintf(fp, "\n; ASCII Strings\n");
-						iPrintHead = 1;
-					}
-					fprintf(fp, "0x%08X: %s\n", dwAddr-dwRealLen, curr.c_str());
+					fprintf(fp, "\n; Strings\n");
+					iPrintHead = 1;
 				}
-				curr.clear();
+				fprintf(fp, "0x%08X: %s\n", dwAddr, curr.c_str());
+				dwAddr = dwNext;
 			}
-			dwRealLen = 0;
+			else
+			{
+				dwAddr++;
+			}
 		}
-		dwAddr++;
 	}
 }
 
@@ -1475,7 +1466,7 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 				std::string str;
 
 				fprintf(fp, "; Data ref 0x%08X", imm->target);
-				if(ReadString(imm->target-dwBase, str, false) || ReadString(imm->target-dwBase, str, true))
+				if(ReadString(imm->target-dwBase, str, false, NULL) || ReadString(imm->target-dwBase, str, true, NULL))
 				{
 					fprintf(fp, " %s", str.c_str());
 				}

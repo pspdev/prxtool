@@ -722,6 +722,7 @@ int main(int argc, char **argv)
 	out_fp = stdout;
 	COutput::SetOutputHandler(DoOutput);
 	COutput::Printf(LEVEL_INFO, "PRXTool v%s : (c) TyRaNiD 2k6\n", PRXTOOL_VERSION);
+	COutput::Printf(LEVEL_INFO, "Built: %s %s\n", __DATE__, __TIME__);
 
 	if(process_args(argc, argv))
 	{

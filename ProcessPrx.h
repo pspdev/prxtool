@@ -42,7 +42,7 @@ class CProcessPrx : public CProcessElf
 	void FreeSymbols(SymbolMap &syms);
 	void FreeImms(ImmMap &imms);
 	void FixupRelocs(u32 dwBase, ImmMap &imms);
-	bool ReadString(u32 dwAddr, std::string &str, bool unicode);
+	bool ReadString(u32 dwAddr, std::string &str, bool unicode, u32 *dwRet);
 	void DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
 	void DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
 	void Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase);

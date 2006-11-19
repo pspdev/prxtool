@@ -646,7 +646,7 @@ void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &sym
 
 			if(addr == 0xFFFFFFFF)
 			{
-				continue;
+				break;
 			}
 
 			if(g_inst[i].type & (INSTR_TYPE_B | INSTR_TYPE_JUMP))
@@ -681,6 +681,48 @@ void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &sym
 			}
 		}
 	}
+}
+
+int disasmIsBranch(unsigned int opcode, unsigned int PC, unsigned int *dwTarget)
+{
+	int i;
+	int size;
+	int type = 0;
+
+	size = sizeof(g_inst) / sizeof(Instruction);
+	for(i = 0; i < size; i++)
+	{
+		if(((opcode & g_inst[i].mask) == g_inst[i].opcode) && (g_inst[i].type & INSTR_TYPE_BRANCH))
+		{
+			unsigned int addr;
+			int ofs;
+
+			switch(g_inst[i].addrtype)
+			{
+				case ADDR_TYPE_16: ofs = (signed short) (opcode & 0xFFFF);
+								   addr = PC + 4 + ofs * 4;
+								   break;
+				case ADDR_TYPE_26: addr = (opcode & 0x03FFFFFF) << 2;
+								   addr += PC & 0xF0000000;
+								   break;
+				default: addr = 0xFFFFFFFF;
+						 break;
+			};
+
+			if(addr == 0xFFFFFFFF)
+			{
+				continue;
+			}
+
+			if(dwTarget)
+			{
+				*dwTarget = addr;
+			}
+			type = g_inst[i].addrtype;
+		}
+	}
+
+	return type;
 }
 
 void disasmSetHexInts(int hexints)

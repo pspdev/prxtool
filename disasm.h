@@ -55,6 +55,11 @@ typedef std::map<unsigned int, ImmEntry *> ImmMap;
 #define DISASM_OPT_PRINTSWAP 'w'
 #define DISASM_OPT_SIGNEDHEX 'd'
 
+#define INSTR_TYPE_PSP    1
+#define INSTR_TYPE_B      2
+#define INSTR_TYPE_JUMP   4
+#define INSTR_TYPE_JAL    8
+
 /* Enable hexadecimal integers for immediates */
 void disasmSetHexInts(int hexints);
 /* Enable mnemonic MIPS registers */
@@ -73,5 +78,6 @@ void disasmSetSymbols(SymbolMap *syms);
 void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &syms);
 SymbolType disasmResolveSymbol(unsigned int PC, char *name, int namelen);
 SymbolEntry* disasmFindSymbol(unsigned int PC);
+int disasmIsBranch(unsigned int opcode, unsigned int PC, unsigned int *dwTarget);
 
 #endif
