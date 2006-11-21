@@ -598,6 +598,26 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 	return blRet;
 }
 
+bool CProcessPrx::LoadFromBinFile(const char *szFilename, unsigned int dwDataBase)
+{
+	bool blRet = false;
+
+	if(CProcessElf::LoadFromBinFile(szFilename, dwDataBase))
+	{
+		FreeMemory();
+		m_blPrxLoaded = false;
+
+		m_vMem = CVirtualMem(m_pElfBin, m_iBinSize, m_iBaseAddr, MEM_LITTLE_ENDIAN);
+
+		COutput::Printf(LEVEL_INFO, "Loaded BIN %s successfully\n", szFilename);
+		blRet = true;
+		m_blPrxLoaded = true;
+		BuildMaps();
+	}
+
+	return blRet;
+}
+
 PspModule* CProcessPrx::GetModuleInfo()
 {
 	if(m_blPrxLoaded)
@@ -1370,7 +1390,7 @@ void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pD
 		dwEnd = dwAddr + iSize - MINIMUM_STRING;
 		while(dwAddr < dwEnd)
 		{
-			if(ReadString(dwAddr, curr, false, &dwNext) || ReadString(dwAddr, curr, true, &dwNext))
+			if(ReadString(dwAddr - m_dwBase, curr, false, &dwNext) || ReadString(dwAddr - m_dwBase, curr, true, &dwNext))
 			{
 				if(iPrintHead == 0)
 				{
@@ -1378,7 +1398,7 @@ void CProcessPrx::DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pD
 					iPrintHead = 1;
 				}
 				fprintf(fp, "0x%08X: %s\n", dwAddr, curr.c_str());
-				dwAddr = dwNext;
+				dwAddr = dwNext + m_dwBase;
 			}
 			else
 			{
@@ -1534,11 +1554,6 @@ bool CProcessPrx::BuildMaps()
 	{
 		FixupRelocs(m_dwBase, m_imms);
 	}
-	else
-	{
-		/* If no relocs assume it isn't relocatable :P */
-		m_dwBase = 0;
-	}
 	BuildSymbols(m_syms, m_dwBase);
 
 	ImmMap::iterator start = m_imms.begin();
@@ -1603,6 +1618,18 @@ bool CProcessPrx::BuildMaps()
 				dwAddr += 4;
 			}
 		}
+	}
+
+	if(m_syms[m_elfHeader.iEntry + m_dwBase] == NULL)
+	{
+		SymbolEntry *s;
+		s = new SymbolEntry;
+		/* Hopefully most functions will start with a SP assignment */
+		s->type = SYMBOL_FUNC;
+		s->addr = m_elfHeader.iEntry + m_dwBase;
+		s->size = 0;
+		s->name = "_start";
+		m_syms[m_elfHeader.iEntry + m_dwBase] = s;
 	}
 
 	return true;

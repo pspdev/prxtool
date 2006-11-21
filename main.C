@@ -48,6 +48,8 @@ static u32 g_dwBase;
 static const char *g_disopts = "";
 static char g_namepath[PATH_MAX];
 static char g_funcpath[PATH_MAX];
+static bool g_loadbin = false;
+static unsigned int g_database = 0;
 
 static struct option cmd_options[] = {
 	{"output", required_argument, 0, 'o'},
@@ -66,6 +68,8 @@ static struct option cmd_options[] = {
 	{"impexp", no_argument, 0, 'f'},
 	{"disasm", no_argument, 0, 'w'},
 	{"disopts", required_argument, 0, 'i'},
+	{"binary", no_argument, 0, 'b'},
+	{"database", required_argument, 0, 'l'},
 	{"reloc", required_argument, 0, 'r'},
 	{"symbols", no_argument, 0, 'y'},
 	{"funcs", required_argument, 0, 'z'},
@@ -128,7 +132,7 @@ int process_args(int argc, char **argv)
 	int opt_index = 0;
 	init_arguments();
 
-	while((ch = getopt_long(argc, argv, "o:caxeds:n:tukqmfwi:r:z:y", 
+	while((ch = getopt_long(argc, argv, "o:caxbeds:n:tukqmfwi:r:z:yl:", 
 					cmd_options, &opt_index)) != -1)
 	{
 		switch(ch)
@@ -164,6 +168,10 @@ int process_args(int argc, char **argv)
 			case 'f' : g_outputMode = OUTPUT_IMPEXP;
 					   break;
 			case 'r':  g_dwBase = strtoul(optarg, NULL, 0);
+					   break;
+			case 'l':  g_database = strtoul(optarg, NULL, 0);
+					   break;
+			case 'b':  g_loadbin = true;
 					   break;
 			case 's' : {
 						   int i;
@@ -239,6 +247,8 @@ void print_help()
 	COutput::Printf(LEVEL_INFO, "--symbols,  -y         : Output special symbols file\n");
 	COutput::Printf(LEVEL_INFO, "--disasm,   -w         : Disasm the executable sections of the file\n");
 	COutput::Printf(LEVEL_INFO, "--disopts,  -i [opts]  : A list dissasembler options\n");
+	COutput::Printf(LEVEL_INFO, "--binary,   -b         : Load the file as binary for disassembly\n");
+	COutput::Printf(LEVEL_INFO, "--database, -l         : Specify the offset of the data section in the file\n");
 	COutput::Printf(LEVEL_INFO, "--reloc     -r addr    : Relocation the PRX to a different address\n");
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Disassembler Options:\n");
@@ -363,10 +373,20 @@ void output_symbols(const char *file, FILE *out_fp)
 void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 {
 	CProcessPrx prx(g_dwBase);
+	bool blRet;
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	prx.SetNidMgr(nids);
-	if(prx.LoadFromFile(file) == false)
+	if(g_loadbin)
+	{
+		blRet = prx.LoadFromBinFile(file, g_database);
+	}
+	else
+	{
+		blRet = prx.LoadFromFile(file);
+	}
+
+	if(blRet == false)
 	{
 		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures");
 	}

@@ -53,6 +53,7 @@ public:
 	CProcessPrx(u32 dwBase);
 	virtual ~CProcessPrx();
 	virtual bool LoadFromFile(const char *szFilename);
+	virtual bool LoadFromBinFile(const char *szFilename, unsigned int dwDataBase);
 
 	bool PrxToElf(FILE *fp);
 

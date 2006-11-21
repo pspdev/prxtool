@@ -657,6 +657,72 @@ bool CProcessElf::LoadFromFile(const char *szFilename)
 	return blRet;
 }
 
+bool CProcessElf::BuildFakeSections(unsigned int dwDataBase)
+{
+	bool blRet = false;
+
+	if(dwDataBase >= m_iBinSize)
+	{
+		/* If invalid then set to 0 */
+		COutput::Printf(LEVEL_INFO, "Invalid data base address (%d), defaulting to 0\n", dwDataBase);
+		dwDataBase = 0;
+	}
+
+	SAFE_ALLOC(m_pElfSections, ElfSection[3]);
+	if(m_pElfSections)
+	{
+		unsigned int textsize = m_iBinSize;
+		unsigned int datasize = m_iBinSize;
+
+		if(dwDataBase > 0)
+		{
+			textsize = dwDataBase;
+			datasize = m_iBinSize - dwDataBase;
+		}
+
+		m_iSHCount = 3;
+		memset(m_pElfSections, 0, sizeof(ElfSection) * 3);
+		m_pElfSections[1].iType = SHT_PROGBITS;
+		m_pElfSections[1].iFlags = SHF_ALLOC | SHF_EXECINSTR;
+		m_pElfSections[1].pData = m_pElfBin;
+		m_pElfSections[1].iSize = textsize;
+		strcpy(m_pElfSections[1].szName, ".text");
+		m_pElfSections[2].iType = SHT_PROGBITS;
+		m_pElfSections[2].iFlags = SHF_ALLOC;
+		m_pElfSections[2].iAddr = dwDataBase;
+		m_pElfSections[2].pData = m_pElfBin + dwDataBase;
+		m_pElfSections[2].iSize = datasize;
+		strcpy(m_pElfSections[2].szName, ".data");
+		blRet = true;
+	}
+
+	return blRet;
+}
+
+bool CProcessElf::LoadFromBinFile(const char *szFilename, unsigned int dwDataBase)
+{
+	bool blRet = false;
+
+	/* Return the object to a know state */
+	FreeMemory();
+
+	m_pElfBin = LoadFileToMem(szFilename, m_iBinSize);
+	if((m_pElfBin != NULL) && (BuildFakeSections(dwDataBase)))
+	{
+		strncpy(m_szFilename, szFilename, MAXPATH-1);
+		m_szFilename[MAXPATH-1] = 0;
+		blRet = true;
+		m_blElfLoaded = true;
+	}
+
+	if(blRet == false)
+	{
+		FreeMemory();
+	}
+
+	return blRet;
+}
+
 ElfSection* CProcessElf::ElfGetSections(u32 &iSHCount)
 {
 	if(m_blElfLoaded)

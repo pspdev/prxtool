@@ -49,6 +49,7 @@ protected:
 	bool ElfValidateHeader();
 	void ElfDumpHeader();
 	bool BuildBinaryImage();
+	bool BuildFakeSections(unsigned int dwDataBase);
 	u8* LoadFileToMem(const char *szFilename, u32 &lSize);
 	bool LoadPrograms();
 	bool FillSection(ElfSection& elfSect, const Elf32_Shdr *pSection);
@@ -63,6 +64,8 @@ public:
 	virtual ~CProcessElf();
 	/** Load an ELF from a file */
 	virtual bool LoadFromFile(const char *szFilename);
+	/** Load a binary file */
+	virtual bool LoadFromBinFile(const char *szFilename, unsigned int dwDataBase);
 	/** Find an elf section based on its name */
 	ElfSection *ElfFindSection(const char* szName);
 	/** Find an elf section based on its address */
