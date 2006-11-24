@@ -49,6 +49,8 @@ class CProcessPrx : public CProcessElf
 	void CalcElfSize(size_t &iTotal, size_t &iSectCount, size_t &iStrSize);
 	bool OutputElfHeader(FILE *fp, size_t iSectCount);
 	bool OutputSections(FILE *fp, size_t iElfHeadSize, size_t iSectCount, size_t iStrSize);
+	int  FindFuncExtent(u32 dwStart, u8 *pTouchMap);
+	void MapFuncExtents(SymbolMap &syms);
 public:
 	CProcessPrx(u32 dwBase);
 	virtual ~CProcessPrx();

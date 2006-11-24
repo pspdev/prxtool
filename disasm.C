@@ -616,73 +616,6 @@ SymbolEntry* disasmFindSymbol(unsigned int PC)
 	return s;
 }
 
-void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &syms)
-{
-	int i;
-	int size;
-
-	size = sizeof(g_inst) / sizeof(Instruction);
-	for(i = 0; i < size; i++)
-	{
-		if(((opcode & g_inst[i].mask) == g_inst[i].opcode) && (g_inst[i].type & INSTR_TYPE_BRANCH))
-		{
-			char buf[128];
-			unsigned int addr;
-			SymbolEntry *s;
-			int ofs;
-			SymbolType type;
-
-			switch(g_inst[i].addrtype)
-			{
-				case ADDR_TYPE_16: ofs = (signed short) (opcode & 0xFFFF);
-								   addr = PC + 4 + ofs * 4;
-								   break;
-				case ADDR_TYPE_26: addr = (opcode & 0x03FFFFFF) << 2;
-								   addr += PC & 0xF0000000;
-								   break;
-				default: addr = 0xFFFFFFFF;
-						 break;
-			};
-
-			if(addr == 0xFFFFFFFF)
-			{
-				break;
-			}
-
-			if(g_inst[i].type & (INSTR_TYPE_B | INSTR_TYPE_JUMP))
-			{
-				snprintf(buf, sizeof(buf), "loc_%08X", addr);
-				type = SYMBOL_LOCAL;
-			}
-			else
-			{
-				snprintf(buf, sizeof(buf), "sub_%08X", addr);
-				type = SYMBOL_FUNC;
-			}
-
-			s = syms[addr];
-			if(s == NULL)
-			{
-				s = new SymbolEntry;
-				s->addr = addr;
-				s->type = type;
-				s->size = 0;
-				s->name = buf;
-				s->refs.insert(s->refs.end(), PC);
-				syms[addr] = s;
-			}
-			else
-			{
-				if((s->type != SYMBOL_FUNC) && (type == SYMBOL_FUNC))
-				{
-					s->type = SYMBOL_FUNC;
-				}
-				s->refs.insert(s->refs.end(), PC);
-			}
-		}
-	}
-}
-
 int disasmIsBranch(unsigned int opcode, unsigned int PC, unsigned int *dwTarget)
 {
 	int i;
@@ -711,18 +644,62 @@ int disasmIsBranch(unsigned int opcode, unsigned int PC, unsigned int *dwTarget)
 
 			if(addr == 0xFFFFFFFF)
 			{
-				continue;
+				break;
 			}
 
 			if(dwTarget)
 			{
 				*dwTarget = addr;
 			}
-			type = g_inst[i].addrtype;
+			type = g_inst[i].type;
 		}
 	}
 
 	return type;
+}
+
+void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &syms)
+{
+	SymbolType type;
+	int insttype;
+	unsigned int addr;
+	SymbolEntry *s;
+	char buf[128];
+
+	insttype = disasmIsBranch(opcode, PC, &addr);
+	if(insttype != 0)
+	{
+		if(insttype & (INSTR_TYPE_B | INSTR_TYPE_JUMP))
+		{
+			snprintf(buf, sizeof(buf), "loc_%08X", addr);
+			type = SYMBOL_LOCAL;
+		}
+		else
+		{
+			snprintf(buf, sizeof(buf), "sub_%08X", addr);
+			type = SYMBOL_FUNC;
+		}
+
+		s = syms[addr];
+		if(s == NULL)
+		{
+			s = new SymbolEntry;
+			s->addr = addr;
+			s->type = type;
+			s->size = 0;
+			s->name = buf;
+			s->refs.insert(s->refs.end(), PC);
+			syms[addr] = s;
+		}
+		else
+		{
+			if((s->type != SYMBOL_FUNC) && (type == SYMBOL_FUNC))
+			{
+				s->type = SYMBOL_FUNC;
+			}
+			s->refs.insert(s->refs.end(), PC);
+		}
+	}
 }
 
 void disasmSetHexInts(int hexints)

@@ -861,95 +861,137 @@ void CProcessPrx::BuildSymbols(SymbolMap &syms, u32 dwBase)
 	PspLibImport *pImport;
 	int iLoop;
 
-	pExport = m_modInfo.exp_head;
-	pImport = m_modInfo.imp_head;
-
-	while(pExport != NULL)
+	/* If we have a symbol table then no point building from imports/exports */
+	if(m_pElfSymbols)
 	{
-		if(pExport->f_count > 0)
+		int i;
+
+		for(i = 0; i < m_iSymCount; i++)
 		{
-			for(iLoop = 0; iLoop < pExport->f_count; iLoop++)
+			int iType;
+			iType = ELF32_ST_TYPE(m_pElfSymbols[i].info);
+			if((iType == STT_FUNC) || (iType == STT_OBJECT))
 			{
 				SymbolEntry *s;
-
-				s = syms[pExport->funcs[iLoop].addr + dwBase];
-				if(s)
+				s = syms[m_pElfSymbols[i].value + dwBase];
+				if(s == NULL)
 				{
-					if(strcmp(s->name.c_str(), pExport->funcs[iLoop].name))
+					s = new SymbolEntry;
+					s->addr = m_pElfSymbols[i].value + dwBase;
+					if(iType == STT_FUNC)
 					{
-						s->alias.insert(s->alias.end(), pExport->funcs[iLoop].name);
+						s->type = SYMBOL_FUNC;
 					}
+					else
+					{
+						s->type = SYMBOL_DATA;
+					}
+					s->size = m_pElfSymbols[i].size;
+					s->name = m_pElfSymbols[i].symname; 
+					syms[m_pElfSymbols[i].value + dwBase] = s;
 				}
 				else
 				{
-					s = new SymbolEntry;
-					s->addr = pExport->funcs[iLoop].addr + dwBase;
+					if(strcmp(s->name.c_str(), m_pElfSymbols[i].symname))
+					{
+						s->alias.insert(s->alias.end(), m_pElfSymbols[i].symname);
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		pExport = m_modInfo.exp_head;
+		pImport = m_modInfo.imp_head;
+
+		while(pExport != NULL)
+		{
+			if(pExport->f_count > 0)
+			{
+				for(iLoop = 0; iLoop < pExport->f_count; iLoop++)
+				{
+					SymbolEntry *s;
+
+					s = syms[pExport->funcs[iLoop].addr + dwBase];
+					if(s)
+					{
+						if(strcmp(s->name.c_str(), pExport->funcs[iLoop].name))
+						{
+							s->alias.insert(s->alias.end(), pExport->funcs[iLoop].name);
+						}
+					}
+					else
+					{
+						s = new SymbolEntry;
+						s->addr = pExport->funcs[iLoop].addr + dwBase;
+						s->type = SYMBOL_FUNC;
+						s->size = 0;
+						s->name = pExport->funcs[iLoop].name;
+						syms[pExport->funcs[iLoop].addr + dwBase] = s;
+					}
+				}
+			}
+
+			if(pExport->v_count > 0)
+			{
+				for(iLoop = 0; iLoop < pExport->v_count; iLoop++)
+				{
+					SymbolEntry *s;
+
+					s = syms[pExport->vars[iLoop].addr + dwBase];
+					if(s)
+					{
+						if(strcmp(s->name.c_str(), pExport->vars[iLoop].name))
+						{
+							s->alias.insert(s->alias.end(), pExport->vars[iLoop].name);
+						}
+					}
+					else
+					{
+						s = new SymbolEntry;
+						s->addr = pExport->vars[iLoop].addr + dwBase;
+						s->type = SYMBOL_DATA;
+						s->size = 0;
+						s->name = pExport->vars[iLoop].name;
+						syms[pExport->vars[iLoop].addr + dwBase] = s;
+					}
+				}
+			}
+
+			pExport = pExport->next;
+		}
+
+		while(pImport != NULL)
+		{
+			if(pImport->f_count > 0)
+			{
+				for(iLoop = 0; iLoop < pImport->f_count; iLoop++)
+				{
+					SymbolEntry *s = new SymbolEntry;
+					s->addr = pImport->funcs[iLoop].addr + dwBase;
 					s->type = SYMBOL_FUNC;
 					s->size = 0;
-					s->name = pExport->funcs[iLoop].name;
-					syms[pExport->funcs[iLoop].addr + dwBase] = s;
+					s->name = pImport->funcs[iLoop].name;
+					syms[pImport->funcs[iLoop].addr + dwBase] = s;
 				}
 			}
-		}
 
-		if(pExport->v_count > 0)
-		{
-			for(iLoop = 0; iLoop < pExport->v_count; iLoop++)
+			if(pImport->v_count > 0)
 			{
-				SymbolEntry *s;
-
-				s = syms[pExport->vars[iLoop].addr + dwBase];
-				if(s)
+				for(iLoop = 0; iLoop < pImport->v_count; iLoop++)
 				{
-					if(strcmp(s->name.c_str(), pExport->vars[iLoop].name))
-					{
-						s->alias.insert(s->alias.end(), pExport->vars[iLoop].name);
-					}
-				}
-				else
-				{
-					s = new SymbolEntry;
-					s->addr = pExport->vars[iLoop].addr + dwBase;
+					SymbolEntry *s = new SymbolEntry;
+					s->addr = pImport->vars[iLoop].addr + dwBase;
 					s->type = SYMBOL_DATA;
 					s->size = 0;
-					s->name = pExport->vars[iLoop].name;
-					syms[pExport->vars[iLoop].addr + dwBase] = s;
+					s->name = pImport->vars[iLoop].name;
+					syms[pImport->vars[iLoop].addr + dwBase] = s;
 				}
 			}
+
+			pImport = pImport->next;
 		}
-
-		pExport = pExport->next;
-	}
-
-	while(pImport != NULL)
-	{
-		if(pImport->f_count > 0)
-		{
-			for(iLoop = 0; iLoop < pImport->f_count; iLoop++)
-			{
-				SymbolEntry *s = new SymbolEntry;
-				s->addr = pImport->funcs[iLoop].addr + dwBase;
-				s->type = SYMBOL_FUNC;
-				s->size = 0;
-				s->name = pImport->funcs[iLoop].name;
-				syms[pImport->funcs[iLoop].addr + dwBase] = s;
-			}
-		}
-
-		if(pImport->v_count > 0)
-		{
-			for(iLoop = 0; iLoop < pImport->v_count; iLoop++)
-			{
-				SymbolEntry *s = new SymbolEntry;
-				s->addr = pImport->vars[iLoop].addr + dwBase;
-				s->type = SYMBOL_DATA;
-				s->size = 0;
-				s->name = pImport->vars[iLoop].name;
-				syms[pImport->vars[iLoop].addr + dwBase] = s;
-			}
-		}
-
-		pImport = pImport->next;
 	}
 }
 
@@ -1414,6 +1456,8 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 	u32 *pInst;
 	pInst  = (u32*) pData;
 	u32 inst;
+	SymbolEntry *lastFunc = NULL;
+	unsigned int lastFuncAddr = 0;
 
 	for(iILoop = 0; iILoop < (iSize / 4); iILoop++)
 	{
@@ -1446,6 +1490,11 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 									  fprintf(fp, "; Prototype: %s (*)(%s)\n", t->ret, t->args);
 								  }
 								  fprintf(fp, "%s:", s->name.c_str());
+								  if(s->size > 0)
+								  {
+									  lastFunc = s;
+									  lastFuncAddr = dwAddr + s->size;
+								  }
 								  break;
 				case SYMBOL_LOCAL: fprintf(fp, "\n");
 								   fprintf(fp, "%s:", s->name.c_str());
@@ -1543,6 +1592,46 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 
 		fprintf(fp, "\t%-40s\n", disasmInstruction(inst, dwAddr, NULL, NULL, 0));
 		dwAddr += 4;
+		if((lastFunc != NULL) && (dwAddr >= lastFuncAddr))
+		{
+			fprintf(fp, "\n; End Subroutine %s\n", lastFunc->name.c_str());
+			fprintf(fp, "; ======================================================\n");
+			lastFunc = NULL;
+			lastFuncAddr = 0;
+		}
+	}
+}
+
+int CProcessPrx::FindFuncExtent(u32 dwStart, u8 *pTouchMap)
+{
+	return 0;
+}
+
+void CProcessPrx::MapFuncExtents(SymbolMap &syms)
+{
+	SymbolMap::iterator start = syms.begin();
+	SymbolMap::iterator end = syms.end();
+	u8 *pTouchMap;
+
+	pTouchMap = new u8[m_iBinSize];
+	memset(pTouchMap, 0, m_iBinSize);
+
+	while(start != end)
+	{
+		SymbolEntry *s;
+		s = syms[(*start).first];
+		if((s->type == SYMBOL_FUNC) && (s->size == 0))
+		{
+			int size;
+
+			size = FindFuncExtent(s->addr, pTouchMap);
+			if(size > 0)
+			{
+				s->size = size;
+			}
+		}
+
+		start++;
 	}
 }
 
@@ -1631,6 +1720,8 @@ bool CProcessPrx::BuildMaps()
 		s->name = "_start";
 		m_syms[m_elfHeader.iEntry + m_dwBase] = s;
 	}
+
+	MapFuncExtents(m_syms);
 
 	return true;
 }
