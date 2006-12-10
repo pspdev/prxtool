@@ -249,6 +249,7 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name, const
 						pName = ReadNid(elmFunction, pLib->pNids[iLoop].nid);
 						if(pName)
 						{
+							pLib->pNids[iLoop].pParentLib = pLib;
 							strcpy(pLib->pNids[iLoop].name, pName);
 							COutput::Printf(LEVEL_DEBUG, "Read func:%s nid:0x%08X\n", pLib->pNids[iLoop].name, pLib->pNids[iLoop].nid);
 							iLoop++;
@@ -368,7 +369,6 @@ LibraryEntry *CNidMgr::GetLibraries(void)
 const char *CNidMgr::FindDependancy(const char *lib)
 {
 	LibraryEntry *pLib;
-	static char szUnknown[256];
 
 	pLib = m_pLibHead;
 
@@ -382,8 +382,7 @@ const char *CNidMgr::FindDependancy(const char *lib)
 		pLib = pLib->pNext;
 	}
 
-	sprintf(szUnknown, "Unknown (%s)", lib);
-	return szUnknown;
+	return NULL;
 }
 
 static char *strip_whitesp(char *str)

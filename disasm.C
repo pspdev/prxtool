@@ -566,6 +566,7 @@ static int g_printregs = 0;
 static int g_regmask = 0;
 static int g_printswap = 0;
 static int g_signedhex = 0;
+static int g_xmloutput = 0;
 static SymbolMap *g_syms = NULL;
 
 struct DisasmOpt
@@ -856,7 +857,14 @@ static char *print_jump(unsigned int addr, char *output)
 
 	if(symfound)
 	{
-		len = sprintf(output, "%s", symbol);
+		if(g_xmloutput)
+		{
+			len = sprintf(output, "<a href=\"#%s\">%s</a>", symbol, symbol);
+		}
+		else
+		{
+			len = sprintf(output, "%s", symbol);
+		}
 	}
 	else
 	{
@@ -1161,7 +1169,8 @@ end:
 
 void format_line(char *code, int codelen, const char *addr, unsigned int opcode, const char *name, const char *args, int noaddr)
 {
-	char ascii[5];
+	char ascii[17];
+	char *p;
 	int i;
 
 	if(name == NULL)
@@ -1170,6 +1179,7 @@ void format_line(char *code, int codelen, const char *addr, unsigned int opcode,
 		args = "";
 	}
 
+	p = ascii;
 	for(i = 0; i < 4; i++)
 	{
 		unsigned char ch;
@@ -1179,9 +1189,17 @@ void format_line(char *code, int codelen, const char *addr, unsigned int opcode,
 		{
 			ch = '.';
 		}
-		ascii[i] = ch;
+		if(g_xmloutput && (ch == '<'))
+		{
+			strcpy(p, "&lt;");
+			p += strlen(p);
+		}
+		else
+		{
+			*p++ = ch;
+		}
 	}
-	ascii[4] = 0;
+	*p = 0;
 
 	if(noaddr)
 	{
@@ -1191,7 +1209,14 @@ void format_line(char *code, int codelen, const char *addr, unsigned int opcode,
 	{
 		if(g_printswap)
 		{
-			snprintf(code, codelen, "%-10s %-40s ; %s: 0x%08X '%s'", name, args, addr, opcode, ascii);
+			if(g_xmloutput)
+			{
+				snprintf(code, codelen, "%-10s %-80s ; %s: 0x%08X '%s'", name, args, addr, opcode, ascii);
+			}
+			else
+			{
+				snprintf(code, codelen, "%-10s %-40s ; %s: 0x%08X '%s'", name, args, addr, opcode, ascii);
+			}
 		}
 		else
 		{
@@ -1202,10 +1227,10 @@ void format_line(char *code, int codelen, const char *addr, unsigned int opcode,
 
 const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int *realregs, unsigned int *regmask, int noaddr)
 {
-	static char code[256];
+	static char code[1024];
 	const char *name = NULL;
-	char args[128];
-	char addr[128];
+	char args[1024];
+	char addr[1024];
 	int size;
 	int i;
 	struct Instruction *ix = NULL;
@@ -1264,4 +1289,9 @@ const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int
 	format_line(code, sizeof(code), addr, opcode, name, args, noaddr);
 
 	return code;
+}
+
+void disasmSetXmlOutput()
+{
+	g_xmloutput = 1;
 }

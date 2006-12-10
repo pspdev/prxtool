@@ -20,6 +20,8 @@
 #define FUNCTION_ARGS_MAX   128
 #define FUNCTION_RET_MAX    64
 
+struct LibraryEntry;
+
 /** Structure to hold a single library nid */
 struct LibraryNid
 {
@@ -27,6 +29,8 @@ struct LibraryNid
 	u32 nid;
 	/** The name of the symbol */
 	char name[LIB_SYMBOL_NAME_MAX];
+	/** The parent library */
+	struct LibraryEntry *pParentLib;
 };
 
 /** Structure to hold a single function entry */

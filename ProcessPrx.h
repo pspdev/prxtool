@@ -29,6 +29,7 @@ class CProcessPrx : public CProcessElf
 	ImmMap m_imms;
 	SymbolMap m_syms;
 	u32 m_dwBase;
+	bool m_blXmlDump;
 
 	bool FillModule(ElfSection *pInfoSect);
 	void FreeMemory();
@@ -44,6 +45,7 @@ class CProcessPrx : public CProcessElf
 	void FixupRelocs(u32 dwBase, ImmMap &imms);
 	bool ReadString(u32 dwAddr, std::string &str, bool unicode, u32 *dwRet);
 	void DumpStrings(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
+	void PrintRow(FILE *fp, const u32* row, s32 row_size, u32 addr);
 	void DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
 	void Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase);
 	void CalcElfSize(size_t &iTotal, size_t &iSectCount, size_t &iStrSize);
@@ -59,6 +61,7 @@ public:
 
 	bool PrxToElf(FILE *fp);
 
+	void SetXmlDump();
 	PspModule* GetModuleInfo();
 	ElfReloc* GetRelocs(int &iCount);
 	ElfSymbol* GetSymbols(int &iCount);

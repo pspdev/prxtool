@@ -16,6 +16,7 @@
 #include "SerializePrxToMap.h"
 #include "ProcessPrx.h"
 #include "output.h"
+#include "getargs.h"
 
 #define PRXTOOL_VERSION "1.0"
 
@@ -49,31 +50,83 @@ static const char *g_disopts = "";
 static char g_namepath[PATH_MAX];
 static char g_funcpath[PATH_MAX];
 static bool g_loadbin = false;
+static bool g_xmlOutput = false;
 static unsigned int g_database = 0;
 
-static struct option cmd_options[] = {
-	{"output", required_argument, 0, 'o'},
-	{"idcout", no_argument, 0, 'c'},
-	{"mapout", no_argument, 0, 'a'},
-	{"xmlout", no_argument, 0, 'x'},
-	{"elfout", no_argument, 0, 'e'},
-	{"debug", no_argument, 0, 'd'},
-	{"serial", required_argument, 0, 's'},
-	{"xmlfile", required_argument, 0, 'n'},
-	{"stubs", no_argument, 0, 't'},
-	{"prxstubs", no_argument, 0, 'u'},
-	{"newstubs", no_argument, 0, 'k'},
-	{"depends", no_argument, 0, 'q'},
-	{"modinfo", no_argument, 0, 'm'},
-	{"impexp", no_argument, 0, 'f'},
-	{"disasm", no_argument, 0, 'w'},
-	{"disopts", required_argument, 0, 'i'},
-	{"binary", no_argument, 0, 'b'},
-	{"database", required_argument, 0, 'l'},
-	{"reloc", required_argument, 0, 'r'},
-	{"symbols", no_argument, 0, 'y'},
-	{"funcs", required_argument, 0, 'z'},
-	{NULL, 0, 0, 0},
+int do_serialize(const char *arg)
+{
+	int i;
+
+	i = 0;
+	g_iSMask = 0;
+	while(optarg[i])
+	{
+		switch(tolower(optarg[i]))
+		{
+			case 'i' : g_iSMask |= SERIALIZE_IMPORTS;
+						break;
+			case 'x' : g_iSMask |= SERIALIZE_EXPORTS;
+						break;
+			case 'r' : g_iSMask |= SERIALIZE_RELOCS;
+						break;
+			case 's' : g_iSMask |= SERIALIZE_SECTIONS;
+						break;
+			case 'l' : g_iSMask |= SERIALIZE_DOSYSLIB;
+						break;
+			default:   COutput::Printf(LEVEL_WARNING, 
+							"Unknown serialize option '%c'\n", 
+							tolower(optarg[i]));
+					   return 0;
+		};
+		i++;
+	}
+
+	return 1;
+}
+
+static struct ArgEntry cmd_options[] = {
+	{"output", 'o', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pOutfile, 0, 
+		"outfile : Outputfile. If not specified uses stdout"},
+	{"idcout", 'c', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_IDC, 
+		"        : Output an IDC file (default)"},
+	{"mapout", 'a', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_MAP, 
+		"        : Output a MAP file"},
+	{"xmlout", 'x', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_XML, 
+		"        : Output an XML file"},
+	{"elfout", 'e', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_ELF, 
+		"        : Output an ELF from a PRX"},
+	{"debug", 'd', ARG_TYPE_BOOL, ARG_OPT_NONE, (void*) &g_blDebug, true,
+		"        : Enable debug mode"},
+	{"serial", 's', ARG_TYPE_FUNC, ARG_OPT_REQUIRED, (void*) &do_serialize, 0, 
+		"ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)"},
+	{"xmlfile", 'n', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pNamefile, 0, 
+		"imp.xml : Specify a XML file containing the NID tables"},
+	{"xmldis", 'g', ARG_TYPE_BOOL, ARG_OPT_NONE, (void*) &g_xmlOutput, true, 
+		"        : Enable XML disassembly output mode"},
+	{"stubs", 't', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_STUB, 
+		"        : Emit stub files for the XML file passed on the command line"},
+	{"prxstubs", 'u', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_PSTUB, 
+		"        : Emit stub files based on the exports of the specified PRX files" },
+	{"newstubs", 'k', ARG_TYPE_BOOL, ARG_OPT_NONE, (void*) &g_newstubs, true, 
+		"        : Emit new style stubs for the SDK"},
+	{"depends", 'q', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_DEP, 
+		"        : Print PRX dependencies. (Should have loaded an XML file to be useful"},
+	{"modinfo", 'm', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_MOD, 
+		"        : Print the module and library information to screen"},
+	{"impexp", 'f', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_IMPEXP, 
+		"        : Print the imports and exports of a prx"},
+	{"disasm", 'w', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_DISASM, 
+		"        : Disasm the executable sections of the files (if more than one file output name is automatic)"},
+	{"disopts", 'i', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_disopts, 0, 
+		"opts    : Specify options for disassembler"},
+	{"binary", 'b', ARG_TYPE_BOOL, ARG_OPT_NONE, (void*) &g_loadbin, true, 
+		"        : Load the file as binary for disassembly"},
+	{"database", 'l', ARG_TYPE_INT, ARG_OPT_REQUIRED, (void*) &g_database, 0, 
+		"        : Specify the offset of the data section in the file for binary disassembly"},
+	{"reloc", 'r', ARG_TYPE_INT, ARG_OPT_REQUIRED, (void*) &g_dwBase, 0, 
+		"addr    : Relocate the PRX to a different address"},
+	{"symbols", 'y', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_SYMBOLS, NULL},
+	{"funcs", 'z', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pFuncfile, 0, NULL},
 };
 
 void DoOutput(OutputLevel level, const char *str)
@@ -128,128 +181,34 @@ void init_arguments()
 
 int process_args(int argc, char **argv)
 {
-	int ch;
-	int opt_index = 0;
 	init_arguments();
 
-	while((ch = getopt_long(argc, argv, "o:caxbeds:n:tukqmfwi:r:z:yl:", 
-					cmd_options, &opt_index)) != -1)
+	g_ppInfiles = GetArgs(&argc, argv, cmd_options, ARG_COUNT(cmd_options));
+	if((g_ppInfiles) && (argc > 0))
 	{
-		switch(ch)
-		{
-			case 'd': g_blDebug = true;
-					  break;
-			case 'x' : g_outputMode = OUTPUT_XML;
-					   break;
-			case 'e' : g_outputMode = OUTPUT_ELF;
-					   break;
-			case 'c' : g_outputMode = OUTPUT_IDC;
-					   break;
-			case 'a' : g_outputMode = OUTPUT_MAP;
-					   break;
-			case 't' : g_outputMode = OUTPUT_STUB;
-					   break;
-			case 'q' : g_outputMode = OUTPUT_DEP;
-					   break;
-			case 'u' : g_outputMode = OUTPUT_PSTUB;
-					   break;
-			case 'w' : g_outputMode = OUTPUT_DISASM;
-					   break;
-			case 'i':  g_disopts = optarg;
-					   break;
-			case 'o' : g_pOutfile = optarg;
-					   break;
-			case 'n' : g_pNamefile = optarg;
-					   break;
-			case 'm' : g_outputMode = OUTPUT_MOD;
-					   break;
-			case 'k' : g_newstubs = 1;
-					   break;
-			case 'f' : g_outputMode = OUTPUT_IMPEXP;
-					   break;
-			case 'r':  g_dwBase = strtoul(optarg, NULL, 0);
-					   break;
-			case 'l':  g_database = strtoul(optarg, NULL, 0);
-					   break;
-			case 'b':  g_loadbin = true;
-					   break;
-			case 's' : {
-						   int i;
-
-						   i = 0;
-						   g_iSMask = 0;
-						   while(optarg[i])
-						   {
-							   switch(tolower(optarg[i]))
-							   {
-								   case 'i' : g_iSMask |= SERIALIZE_IMPORTS;
-											  break;
-								   case 'x' : g_iSMask |= SERIALIZE_EXPORTS;
-											  break;
-								   case 'r' : g_iSMask |= SERIALIZE_RELOCS;
-											  break;
-								   case 's' : g_iSMask |= SERIALIZE_SECTIONS;
-											  break;
-								   case 'l' : g_iSMask |= SERIALIZE_DOSYSLIB;
-											  break;
-								   default:   COutput::Printf(LEVEL_WARNING, 
-													  "Unknown serialize option '%c'\n", 
-													  tolower(optarg[i]));
-											  break;
-							   };
-							   i++;
-						   }
-					   }
-					   break;
-			case 'y': g_outputMode = OUTPUT_SYMBOLS;
-					  break;
-			case 'z': g_pFuncfile = optarg;
-					  break;
-			case '?':
-			default:
-					   return 0;
-		};
+		g_iInFiles = argc;
 	}
-
-	argc -= optind;
-	argv += optind;
-
-	if(argc < 1)
+	else
 	{
 		return 0;
 	}
-
-	g_ppInfiles = &argv[0];
-	g_iInFiles = argc;
 
 	return 1;
 }
 
 void print_help()
 {
+	int i;
 	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] file\n");
 	COutput::Printf(LEVEL_INFO, "Options:\n");
-	COutput::Printf(LEVEL_INFO, "--output,   -o outfile : Output file. If not specified uses stdout\n");
-	COutput::Printf(LEVEL_INFO, "--idcout,   -c         : Output an IDC file (default)\n");
-	COutput::Printf(LEVEL_INFO, "--mapout,   -a         : Output a MAP file\n");
-	COutput::Printf(LEVEL_INFO, "--xmlout,   -x         : Output an XML file\n");
-	COutput::Printf(LEVEL_INFO, "--elfout,   -e         : Output an ELF from a PRX\n");
-	COutput::Printf(LEVEL_INFO, "--debug,    -d         : Enable debug mode\n");
-	COutput::Printf(LEVEL_INFO, "--serial,   -s ixrsl   : Specify what to serialize (Imports,Exports,Relocs,Sections,SyslibExp)\n");
-	COutput::Printf(LEVEL_INFO, "--xmlfile,  -n imp.xml : Specify a XML file containing the nid tables\n");
-	COutput::Printf(LEVEL_INFO, "--funcs,    -z funcs   : Specify a function prototype file\n");
-	COutput::Printf(LEVEL_INFO, "--stubs,    -t         : Emit stub files for the XML file passed on the command line\n");
-	COutput::Printf(LEVEL_INFO, "--prxstubs, -u         : Emit stub files based on the exports of the specified prx files\n");
-	COutput::Printf(LEVEL_INFO, "--newstubs, -k         : Emit new style stubs for the SDK\n");
-	COutput::Printf(LEVEL_INFO, "--depends,  -q         : Print PRX dependencies. (Should have loaded an XML file to be useful\n");
-	COutput::Printf(LEVEL_INFO, "--modinfo,  -m         : Print the module and library information to screen\n");
-	COutput::Printf(LEVEL_INFO, "--impexp,   -f         : Print the imports and exports of a prx\n");
-	COutput::Printf(LEVEL_INFO, "--symbols,  -y         : Output special symbols file\n");
-	COutput::Printf(LEVEL_INFO, "--disasm,   -w         : Disasm the executable sections of the file\n");
-	COutput::Printf(LEVEL_INFO, "--disopts,  -i [opts]  : A list dissasembler options\n");
-	COutput::Printf(LEVEL_INFO, "--binary,   -b         : Load the file as binary for disassembly\n");
-	COutput::Printf(LEVEL_INFO, "--database, -l         : Specify the offset of the data section in the file\n");
-	COutput::Printf(LEVEL_INFO, "--reloc     -r addr    : Relocation the PRX to a different address\n");
+
+	for(i = 0; i < ARG_COUNT(cmd_options); i++)
+	{
+		if(cmd_options[i].help)
+		{
+			COutput::Printf(LEVEL_INFO, "--%-10s -%c %s\n", cmd_options[i].full, cmd_options[i].ch, cmd_options[i].help);
+		}
+	}
 	COutput::Printf(LEVEL_INFO, "\n");
 	COutput::Printf(LEVEL_INFO, "Disassembler Options:\n");
 	COutput::Printf(LEVEL_INFO, "x - Print immediates all in hex (not just appropriate ones\n");
@@ -374,6 +333,7 @@ void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 {
 	CProcessPrx prx(g_dwBase);
 	bool blRet;
+	int i;
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	prx.SetNidMgr(nids);
@@ -384,6 +344,11 @@ void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 	else
 	{
 		blRet = prx.LoadFromFile(file);
+	}
+
+	if(g_xmlOutput)
+	{
+		prx.SetXmlDump();
 	}
 
 	if(blRet == false)
@@ -566,6 +531,7 @@ void output_deps(const char *file, CNidMgr *pNids)
 	else
 	{
 		PspLibImport *pHead;
+		char path[PATH_MAX];
 		int i;
 
 		i = 0;
@@ -573,7 +539,15 @@ void output_deps(const char *file, CNidMgr *pNids)
 		pHead = prx.GetImports();
 		while(pHead != NULL)
 		{
-			COutput::Printf(LEVEL_INFO, "Dependacy %d for %s: %s\n", i++, pHead->name, pNids->FindDependancy(pHead->name));
+			if(strlen(pHead->file) > 0)
+			{
+				strcpy(path, pHead->file);
+			}
+			else
+			{
+				snprintf(path, PATH_MAX, "Unknown (%s)", pHead->name);
+			}
+			COutput::Printf(LEVEL_INFO, "Dependancy %d for %s: %s\n", i++, pHead->name, path);
 			pHead = pHead->next;
 		}
 	}
@@ -841,7 +815,57 @@ int main(int argc, char **argv)
 		}
 		else if(g_outputMode == OUTPUT_DISASM)
 		{
-			output_disasm(g_ppInfiles[0], out_fp, &nids);
+			int iLoop;
+
+			if(g_iInFiles == 1)
+			{
+				output_disasm(g_ppInfiles[0], out_fp, &nids);
+			}
+			else
+			{
+				char path[PATH_MAX];
+				int len;
+
+				for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
+				{
+					FILE *out;
+					const char *file;
+
+					file = strrchr(g_ppInfiles[iLoop], '/');
+					if(file)
+					{
+						file++;
+					}
+					else
+					{
+						file = g_ppInfiles[iLoop];
+					}
+
+					if(g_xmlOutput)
+					{
+						len = snprintf(path, PATH_MAX, "%s.html", file);
+					}
+					else
+					{
+						len = snprintf(path, PATH_MAX, "%s.txt", file);
+					}
+
+					if((len < 0) || (len >= PATH_MAX))
+					{
+						continue;
+					}
+
+					out = fopen(path, "w");
+					if(out == NULL)
+					{
+						COutput::Printf(LEVEL_INFO, "Could not open file %s for writing\n", path);
+						continue;
+					}
+
+					output_disasm(g_ppInfiles[iLoop], out, &nids);
+					fclose(out);
+				}
+			}
 		}
 		else
 		{

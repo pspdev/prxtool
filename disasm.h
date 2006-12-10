@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include "prxtypes.h"
 
 enum SymbolType
 {
@@ -31,6 +32,8 @@ struct SymbolEntry
 	std::string name;
 	RefMap refs;
 	AliasMap alias;
+	std::vector<PspLibExport *> exported;
+	std::vector<PspLibImport *> imported;
 };
 
 typedef std::map<unsigned int, SymbolEntry*> SymbolMap;
@@ -79,5 +82,6 @@ void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &sym
 SymbolType disasmResolveSymbol(unsigned int PC, char *name, int namelen);
 SymbolEntry* disasmFindSymbol(unsigned int PC);
 int disasmIsBranch(unsigned int opcode, unsigned int PC, unsigned int *dwTarget);
+void disasmSetXmlOutput();
 
 #endif

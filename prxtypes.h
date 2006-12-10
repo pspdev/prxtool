@@ -8,6 +8,7 @@
 #ifndef __PRXTYPES_H__
 #define __PRXTYPES_H__
 
+#include <limits.h>
 #include "types.h"
 
 #define PSP_MODULE_MAX_NAME 28
@@ -89,18 +90,20 @@ struct PspLibImport
 	PspLibImport *next;
 	/** Name of the library */
 	char name[PSP_LIB_MAX_NAME];
-	/* Virtual address of the lib import stub */
+	/** Virtual address of the lib import stub */
 	u32 addr;
-	/* Copy of the import stub (in native byte order) */
+	/** Copy of the import stub (in native byte order) */
 	PspModuleImport stub;
-	/* List of function entries */
+	/** List of function entries */
 	PspEntry funcs[PSP_MAX_F_ENTRIES];
-	/* Number of function entries */
+	/** Number of function entries */
 	int f_count;
-	/* List of variable entried */
+	/** List of variable entried */
 	PspEntry vars[PSP_MAX_V_ENTRIES];
-	/* Number of variable entires */
+	/** Number of variable entries */
 	int v_count;
+	/** File containing the export */
+	char file[PATH_MAX];
 };
 
 /* Holds a linking entry for an export library */
