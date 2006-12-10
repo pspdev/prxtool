@@ -9,7 +9,6 @@
 #include <ctype.h>
 #include <unistd.h>
 #include <cassert>
-#include <getopt.h>
 #include <sys/stat.h>
 #include "SerializePrxToIdc.h"
 #include "SerializePrxToXml.h"
@@ -59,9 +58,9 @@ int do_serialize(const char *arg)
 
 	i = 0;
 	g_iSMask = 0;
-	while(optarg[i])
+	while(arg[i])
 	{
-		switch(tolower(optarg[i]))
+		switch(tolower(arg[i]))
 		{
 			case 'i' : g_iSMask |= SERIALIZE_IMPORTS;
 						break;
@@ -75,7 +74,7 @@ int do_serialize(const char *arg)
 						break;
 			default:   COutput::Printf(LEVEL_WARNING, 
 							"Unknown serialize option '%c'\n", 
-							tolower(optarg[i]));
+							tolower(arg[i]));
 					   return 0;
 		};
 		i++;
