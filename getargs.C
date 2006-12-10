@@ -109,11 +109,12 @@ char **GetArgs(int *argc, char **argv, struct ArgEntry *entry, int argcount)
 										*argint = ent->val;
 									 }
 									 break;
-				case ARG_TYPE_FUNC: ArgFunc argfunc = (ArgFunc) ent->argvoid; 
+				case ARG_TYPE_FUNC: { ArgFunc argfunc = (ArgFunc) ent->argvoid; 
 								    if(argfunc(NULL) == 0)
 									{
 										fprintf(stderr, "Error processing argument for %s\n", arg);
 										error = 1;
+									}
 									}
 									break;
 				default: fprintf(stderr, "Invalid type for option %s\n", arg);
@@ -139,17 +140,20 @@ char **GetArgs(int *argc, char **argv, struct ArgEntry *entry, int argcount)
 
 			switch(ent->type)
 			{
-				case ARG_TYPE_INT: int *argint = (int*) ent->argvoid;
+				case ARG_TYPE_INT: { int *argint = (int*) ent->argvoid;
 								   *argint = strtoul(argv[0], NULL, 0);
+								   }
 								   break;
-				case ARG_TYPE_STR: const char **argstr = (const char **) ent->argvoid;
+				case ARG_TYPE_STR: { const char **argstr = (const char **) ent->argvoid;
 								   *argstr = argv[0];
+								   }
 								   break;
-				case ARG_TYPE_FUNC: ArgFunc argfunc = (ArgFunc) ent->argvoid; 
+				case ARG_TYPE_FUNC: { ArgFunc argfunc = (ArgFunc) ent->argvoid; 
 								    if(argfunc(argv[0]) == 0)
 									{
 										fprintf(stderr, "Error processing argument for %s\n", arg);
 										error = 1;
+									}
 									}
 									break;
 				default: fprintf(stderr, "Invalid type for option %s\n", arg);

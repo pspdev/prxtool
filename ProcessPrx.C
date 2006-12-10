@@ -1401,7 +1401,14 @@ bool CProcessPrx::ReadString(u32 dwAddr, std::string &str, bool unicode, u32 *dw
 		{
 			if((ch >= 32) && (ch < 127))
 			{
-				curr += (unsigned char) ch;
+				if((m_blXmlDump) && (ch == '<'))
+				{
+					curr += "&lt;";
+				}
+				else
+				{
+					curr += (unsigned char) ch;
+				}
 				iRealLen++;
 			}
 			else
@@ -1533,21 +1540,30 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 								  }
 								  if(s->exported.size() > 0)
 								  {
-									  int i;
+									  unsigned int i;
 									  for(i = 0; i < s->exported.size(); i++)
 									  {
-										  fprintf(fp, "; Exported in %s\n", s->exported[i]->name);
+										if(m_blXmlDump)
+										{
+											fprintf(fp, "<a name=\"%s_%s\"></a>; Exported in %s\n", 
+													s->exported[i]->name, s->name.c_str(), s->exported[i]->name);
+										}
+										else
+										{
+											fprintf(fp, "; Exported in %s\n", s->exported[i]->name);
+										}
 									  }
 								  }
 								  if(s->imported.size() > 0)
 								  {
-									  int i;
+									  unsigned int i;
 									  for(i = 0; i < s->imported.size(); i++)
 									  {
 										  if((m_blXmlDump) && (strlen(s->imported[i]->file) > 0))
 										  {
-											  fprintf(fp, "; Imported from <a href=\"%s.html#%s\">%s</a>\n", 
-													  s->imported[i]->file, s->name.c_str(), s->imported[i]->file);
+											  fprintf(fp, "; Imported from <a href=\"%s.html#%s_%s\">%s</a>\n", 
+													  s->imported[i]->file, s->imported[i]->name, 
+													  s->name.c_str(), s->imported[i]->file);
 										  }
 										  else
 										  {

@@ -905,10 +905,8 @@ static char *print_jumpr(int reg, char *output, unsigned int *realregs)
 	{
 		return print_jump(realregs[reg], output);
 	}
-	else
-	{
-		return print_cpureg(reg, output);
-	}
+
+	return print_cpureg(reg, output);
 }
 
 static char *print_syscall(unsigned int syscall, char *output)

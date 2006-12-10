@@ -197,7 +197,7 @@ int process_args(int argc, char **argv)
 
 void print_help()
 {
-	int i;
+	unsigned int i;
 	COutput::Printf(LEVEL_INFO, "Usage: prxtool [options...] file\n");
 	COutput::Printf(LEVEL_INFO, "Options:\n");
 
@@ -332,7 +332,6 @@ void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 {
 	CProcessPrx prx(g_dwBase);
 	bool blRet;
-	int i;
 
 	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
 	prx.SetNidMgr(nids);
