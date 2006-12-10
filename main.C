@@ -124,8 +124,10 @@ static struct ArgEntry cmd_options[] = {
 		"        : Specify the offset of the data section in the file for binary disassembly"},
 	{"reloc", 'r', ARG_TYPE_INT, ARG_OPT_REQUIRED, (void*) &g_dwBase, 0, 
 		"addr    : Relocate the PRX to a different address"},
-	{"symbols", 'y', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_SYMBOLS, NULL},
-	{"funcs", 'z', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pFuncfile, 0, NULL},
+	{"symbols", 'y', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_SYMBOLS, 
+		"Output a symbol file based on the input file"},
+	{"funcs", 'z', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pFuncfile, 0, 
+		"Specify a functions file for disassembly"},
 };
 
 void DoOutput(OutputLevel level, const char *str)

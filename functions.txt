@@ -463,14 +463,10 @@ sceRegGetKeysNum|REGHANDLE hd, int *num|int
 sceRegOpenRegistry|struct RegParam *reg, int mode, REGHANDLE *h|int
 sceRegRemoveRegistry|struct RegParam *reg|int
 sceRegSetKeyValue|REGHANDLE hd, const char *name, const void *buf, SceSize size|int
-sceReg_0CAE832B|REGHANDLE hd|int
-sceReg_0D69BF40|REGHANDLE hd|int
-sceReg_1D8A762E|REGHANDLE h, const char *name, int mode, REGHANDLE *hd|int
-sceReg_4CA16893|REGHANDLE h, const char *name|int
-sceReg_driver_0CAE832B|REGHANDLE hd|int
-sceReg_driver_0D69BF40|REGHANDLE hd|int
-sceReg_driver_1D8A762E|REGHANDLE h, const char *name, int mode, REGHANDLE *hd|int
-sceReg_driver_4CA16893|REGHANDLE h, const char *name|int
+sceRegCloseCategory|REGHANDLE hd|int
+sceRegFlushCategory|REGHANDLE hd|int
+sceRegOpenCategory|REGHANDLE h, const char *name, int mode, REGHANDLE *hd|int
+sceRegRemoveCategory|REGHANDLE h, const char *name|int
 sceRtcCheckValid|const pspTime* date|int
 sceRtcCompareTick|const u64* tick1, const u64* tick2|int
 sceRtcConvertLocalTimeToUTC|const u64* tickLocal, u64* tickUTC|int
