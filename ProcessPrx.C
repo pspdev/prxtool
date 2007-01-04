@@ -1725,6 +1725,250 @@ void CProcessPrx::Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, 
 	}
 }
 
+void CProcessPrx::DisasmXML(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase)
+{
+	u32 iILoop;
+	u32 *pInst;
+	pInst  = (u32*) pData;
+	u32 inst;
+	int infunc = 0;
+
+	for(iILoop = 0; iILoop < (iSize / 4); iILoop++)
+	{
+		SymbolEntry *s;
+		//FunctionType *t;
+		//ImmEntry *imm;
+
+		inst = LW(pInst[iILoop]);
+		s = disasmFindSymbol(dwAddr);
+		if(s)
+		{
+			switch(s->type)
+			{
+				case SYMBOL_FUNC: if(infunc)
+								  {
+									  fprintf(fp, "</func>\n");
+								  }
+								  else
+								  {
+									  infunc = 1;
+								  }
+								
+						    	  fprintf(fp, "<func name=\"%s\" link=\"0x%08X\" ", s->name.c_str(), dwAddr);
+
+								  if(s->refs.size() > 0)
+								  {
+									u32 i;
+									fprintf(fp, "refs=\"");
+									for(i = 0; i < s->refs.size(); i++)
+									{
+										if(i < (s->refs.size() - 1))
+										{
+											fprintf(fp, "0x%08X,", s->refs[i]);
+										}
+										else
+										{
+											fprintf(fp, "0x%08X", s->refs[i]);
+										}
+									}
+									fprintf(fp, "\" ");
+								  }
+						    	  fprintf(fp, ">\n");
+
+								  /*
+								  if(s->exported.size() > 0)
+								  {
+									  unsigned int i;
+									  for(i = 0; i < s->exported.size(); i++)
+									  {
+										  unsigned int nid = 0;
+										  PspLibExport *pExp = s->imported[0];
+
+										  for(int i = 0; i < pImp->f_count; i++)
+										  {
+										  	if(strcmp(s->name.c_str(), pImp->funcs[i].name) == 0)
+										  	{
+										  		nid = pImp->funcs[i].nid;
+										  		break;
+										  	}
+										  }
+									  }
+								  }
+								  */
+
+
+								  /*
+								  if(s->alias.size() > 0)
+								  {
+									  fprintf(fp, "- Aliases: ");
+									  u32 i;
+									  for(i = 0; i < s->alias.size()-1; i++)
+									  {
+										  fprintf(fp, "%s, ", s->alias[i].c_str());
+									  }
+									 fprintf(fp, "%s", s->alias[i].c_str());
+								  }
+								  fprintf(fp, "\n");
+								  t = m_pCurrNidMgr->FindFunctionType(s->name.c_str());
+								  if(t)
+								  {
+									  fprintf(fp, "; Prototype: %s (*)(%s)\n", t->ret, t->args);
+								  }
+								  if(s->size > 0)
+								  {
+									  lastFunc = s;
+									  lastFuncAddr = dwAddr + s->size;
+								  }
+								  if(s->exported.size() > 0)
+								  {
+									  unsigned int i;
+									  for(i = 0; i < s->exported.size(); i++)
+									  {
+										if(m_blXmlDump)
+										{
+											fprintf(fp, "<a name=\"%s_%s\"></a>; Exported in %s\n", 
+													s->exported[i]->name, s->name.c_str(), s->exported[i]->name);
+										}
+										else
+										{
+											fprintf(fp, "; Exported in %s\n", s->exported[i]->name);
+										}
+									  }
+								  }
+								  if(s->imported.size() > 0)
+								  {
+									  unsigned int i;
+									  for(i = 0; i < s->imported.size(); i++)
+									  {
+										  if((m_blXmlDump) && (strlen(s->imported[i]->file) > 0))
+										  {
+											  fprintf(fp, "; Imported from <a href=\"%s.html#%s_%s\">%s</a>\n", 
+													  s->imported[i]->file, s->imported[i]->name, 
+													  s->name.c_str(), s->imported[i]->file);
+										  }
+										  else
+										  {
+											  fprintf(fp, "; Imported from %s\n", s->imported[i]->name);
+										  }
+									  }
+								  }
+								  */
+								  break;
+				case SYMBOL_LOCAL: fprintf(fp, "<local name=\"%s\" link=\"0x%08X\" ", s->name.c_str(), dwAddr);
+								  if(s->refs.size() > 0)
+								  {
+									u32 i;
+									fprintf(fp, "refs=\"");
+									for(i = 0; i < s->refs.size(); i++)
+									{
+										if(i < (s->refs.size() - 1))
+										{
+											fprintf(fp, "0x%08X,", s->refs[i]);
+										}
+										else
+										{
+											fprintf(fp, "0x%08X", s->refs[i]);
+										}
+									}
+									fprintf(fp, "\"");
+								  }
+						    	  fprintf(fp, "/>\n");
+								   break;
+				default: /* Do nothing atm */
+								   break;
+			};
+
+		}
+
+#if 0
+		imm = imms[dwAddr];
+		if(imm)
+		{
+			SymbolEntry *sym = disasmFindSymbol(imm->target);
+			if(imm->text)
+			{
+				if(sym)
+				{
+					if(m_blXmlDump)
+					{
+						fprintf(fp, "; Text ref <a href=\"#%s\">%s</a> (0x%08X)", sym->name.c_str(), sym->name.c_str(), imm->target);
+					}
+					else
+					{
+						fprintf(fp, "; Text ref %s (0x%08X)", sym->name.c_str(), imm->target);
+					}
+				}
+				else
+				{
+					if(m_blXmlDump)
+					{
+						fprintf(fp, "; Text ref <a href=\"#0x%08X\">0x%08X</a>", imm->target, imm->target);
+					}
+					else
+					{
+						fprintf(fp, "; Text ref 0x%08X", imm->target);
+					}
+				}
+			}
+			else
+			{
+				std::string str;
+
+				if(m_blXmlDump)
+				{
+					fprintf(fp, "; Data ref <a href=\"#0x%08X\">0x%08X</a>", imm->target & ~15, imm->target);
+				}
+				else
+				{
+					fprintf(fp, "; Data ref 0x%08X", imm->target);
+				}
+				if(ReadString(imm->target-dwBase, str, false, NULL) || ReadString(imm->target-dwBase, str, true, NULL))
+				{
+					fprintf(fp, " %s", str.c_str());
+				}
+				else
+				{
+					u8 *ptr = (u8*) m_vMem.GetPtr(imm->target - dwBase);
+					if(ptr)
+					{
+						/* If a valid pointer try and print some data */
+						int i;
+						fprintf(fp, " ... ");
+						if((imm->target & 3) == 0)
+						{
+							u32 *p32 = (u32*) ptr;
+							/* Possibly words */
+							for(i = 0; i < 4; i++)
+							{
+								fprintf(fp, "0x%08X ", LW(*p32));
+								p32++;
+							}
+						}
+						else
+						{
+							/* Just guess at printing bytes */
+							for(i = 0; i < 16; i++)
+							{
+								fprintf(fp, "0x%02X ", *ptr++);
+							}
+						}
+					}
+				}
+			}
+			fprintf(fp, "\n");
+		}
+#endif
+
+		fprintf(fp, "<inst link=\"0x%08X\">%s</inst>\n", dwAddr, disasmInstructionXML(inst, dwAddr));
+		dwAddr += 4;
+	}
+
+	if(infunc)
+	{
+		fprintf(fp, "</func>\n");
+	}
+}
+
 int CProcessPrx::FindFuncExtent(u32 dwStart, u8 *pTouchMap)
 {
 	return 0;
@@ -1893,6 +2137,64 @@ void CProcessPrx::Dump(FILE *fp, const char *disopts)
 	{
 		fprintf(fp, "</pre></body></html>\n");
 	}
+
+	disasmSetSymbols(NULL);
+}
+
+void CProcessPrx::DumpXML(FILE *fp, const char *disopts)
+{
+	int iLoop;
+	char *slash;
+	PspLibExport *pExport;
+
+	disasmSetSymbols(&m_syms);
+	disasmSetOpts(disopts, 1);
+
+	slash = strrchr(m_szFilename, '/');
+	if(!slash)
+	{
+		slash = m_szFilename;
+	}
+	else
+	{
+		slash++;
+	}
+
+	fprintf(fp, "<prx file=\"%s\" name=\"%s\">\n", slash, m_modInfo.name);
+	fprintf(fp, "<exports>\n");
+	pExport = m_modInfo.exp_head;
+	while(pExport)
+	{
+		fprintf(fp, "<lib name=\"%s\">\n", pExport->name);
+		for(int i = 0; i < pExport->f_count; i++)
+		{
+			fprintf(fp, "<func nid=\"0x%08X\" name=\"%s\" ref=\"0x%08X\" />\n", pExport->funcs[i].nid, pExport->funcs[i].name,
+					pExport->funcs[i].addr);
+		}
+		fprintf(fp, "</lib>\n");
+		pExport = pExport->next;
+	}
+	fprintf(fp, "</exports>\n");
+
+	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+	{
+		if(m_pElfSections[iLoop].iFlags & (SHF_EXECINSTR | SHF_ALLOC))
+		{
+			if((m_pElfSections[iLoop].iSize > 0) && (m_pElfSections[iLoop].iType == SHT_PROGBITS))
+			{
+				if(m_pElfSections[iLoop].iFlags & SHF_EXECINSTR)
+				{
+					fprintf(fp, "<disasm>\n");
+					DisasmXML(fp, m_pElfSections[iLoop].iAddr + m_dwBase, 
+							m_pElfSections[iLoop].iSize, 
+							(u8*) m_vMem.GetPtr(m_pElfSections[iLoop].iAddr),
+							m_imms, m_dwBase);
+					fprintf(fp, "</disasm>\n");
+				}
+			}
+		}
+	}
+	fprintf(fp, "</prx>\n");
 
 	disasmSetSymbols(NULL);
 }

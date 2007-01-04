@@ -33,6 +33,7 @@ enum OutputMode
 	OUTPUT_IMPEXP = 10,
 	OUTPUT_SYMBOLS = 11,
 	OUTPUT_DISASM  = 12,
+	OUTPUT_XMLDB = 13,
 };
 
 static char **g_ppInfiles;
@@ -50,6 +51,7 @@ static char g_namepath[PATH_MAX];
 static char g_funcpath[PATH_MAX];
 static bool g_loadbin = false;
 static bool g_xmlOutput = false;
+static const char *g_pDbTitle;
 static unsigned int g_database = 0;
 
 int do_serialize(const char *arg)
@@ -83,6 +85,14 @@ int do_serialize(const char *arg)
 	return 1;
 }
 
+int do_xmldb(const char *arg)
+{
+	g_pDbTitle = arg;
+	g_outputMode = OUTPUT_XMLDB;
+
+	return 1;
+}
+
 static struct ArgEntry cmd_options[] = {
 	{"output", 'o', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pOutfile, 0, 
 		"outfile : Outputfile. If not specified uses stdout"},
@@ -102,6 +112,8 @@ static struct ArgEntry cmd_options[] = {
 		"imp.xml : Specify a XML file containing the NID tables"},
 	{"xmldis", 'g', ARG_TYPE_BOOL, ARG_OPT_NONE, (void*) &g_xmlOutput, true, 
 		"        : Enable XML disassembly output mode"},
+	{"xmldb",  'w', ARG_TYPE_FUNC, ARG_OPT_REQUIRED, (void*) &do_xmldb, 0,
+		"title   : Output the PRX(es) as an XML database disassembly with a title" },
 	{"stubs", 't', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_STUB, 
 		"        : Emit stub files for the XML file passed on the command line"},
 	{"prxstubs", 'u', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_PSTUB, 
@@ -358,6 +370,32 @@ void output_disasm(const char *file, FILE *out_fp, CNidMgr *nids)
 	else
 	{
 		prx.Dump(out_fp, g_disopts);
+	}
+}
+
+void output_xmldb(const char *file, FILE *out_fp, CNidMgr *nids)
+{
+	CProcessPrx prx(g_dwBase);
+	bool blRet;
+
+	COutput::Printf(LEVEL_INFO, "Loading %s\n", file);
+	prx.SetNidMgr(nids);
+	if(g_loadbin)
+	{
+		blRet = prx.LoadFromBinFile(file, g_database);
+	}
+	else
+	{
+		blRet = prx.LoadFromFile(file);
+	}
+
+	if(blRet == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load elf file structures");
+	}
+	else
+	{
+		prx.DumpXML(out_fp, g_disopts);
 	}
 }
 
@@ -812,6 +850,18 @@ int main(int argc, char **argv)
 		else if(g_outputMode == OUTPUT_SYMBOLS)
 		{
 			output_symbols(g_ppInfiles[0], out_fp);
+		}
+		else if(g_outputMode == OUTPUT_XMLDB)
+		{
+			int iLoop;
+
+			fprintf(out_fp, "<?xml version=\"1.0\" ?>\n");
+			fprintf(out_fp, "<firmware title=\"%s\">\n", g_pDbTitle);
+			for(iLoop = 0; iLoop < g_iInFiles; iLoop++)
+			{
+				output_xmldb(g_ppInfiles[iLoop], out_fp, &nids);
+			}
+			fprintf(out_fp, "</firmware>\n");
 		}
 		else if(g_outputMode == OUTPUT_DISASM)
 		{

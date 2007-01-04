@@ -48,6 +48,7 @@ class CProcessPrx : public CProcessElf
 	void PrintRow(FILE *fp, const u32* row, s32 row_size, u32 addr);
 	void DumpData(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData);
 	void Disasm(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase);
+	void DisasmXML(FILE *fp, u32 dwAddr, u32 iSize, unsigned char *pData, ImmMap &imms, u32 dwBase);
 	void CalcElfSize(size_t &iTotal, size_t &iSectCount, size_t &iStrSize);
 	bool OutputElfHeader(FILE *fp, size_t iSectCount);
 	bool OutputSections(FILE *fp, size_t iElfHeadSize, size_t iSectCount, size_t iStrSize);
@@ -69,6 +70,7 @@ public:
 	PspLibExport *GetExports();
 	void SetNidMgr(CNidMgr* nidMgr);
 	void Dump(FILE *fp, const char *disopts);
+	void DumpXML(FILE *fp, const char *disopts);
 };
 
 #endif

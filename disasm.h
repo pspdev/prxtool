@@ -76,6 +76,7 @@ void disasmSetOpts(const char *opts, int set);
 const char *disasmGetOpts(void);
 void disasmPrintOpts(void);
 const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int *realregs, unsigned int *regmask, int noaddr);
+const char *disasmInstructionXML(unsigned int opcode, unsigned int PC);
 
 void disasmSetSymbols(SymbolMap *syms);
 void disasmAddBranchSymbols(unsigned int opcode, unsigned int PC, SymbolMap &syms);

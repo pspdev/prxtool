@@ -90,7 +90,7 @@ static const char *regName[32] =
     "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
 };
 
-struct Instruction macro[] = 
+struct Instruction g_macro[] = 
 {
 	/* Macro instructions */
 	{ "nop",		0x00000000, 0xFFFFFFFF, "" 			, ADDR_TYPE_NONE, 0 },
@@ -560,7 +560,7 @@ static const char *dr_regs[16] =
 static int g_hexints = 0;
 static int g_mregs = 0;
 static int g_symaddr = 0;
-static int g_macro = 0;
+static int g_macroon = 0;
 static int g_printreal = 0;
 static int g_printregs = 0;
 static int g_regmask = 0;
@@ -580,7 +580,7 @@ struct DisasmOpt g_disopts[DISASM_OPT_MAX] = {
 	{ DISASM_OPT_HEXINTS, &g_hexints, "Hex Integers" },
 	{ DISASM_OPT_MREGS, &g_mregs, "Mnemonic Registers" },
 	{ DISASM_OPT_SYMADDR, &g_symaddr, "Symbol Address" },
-	{ DISASM_OPT_MACRO, &g_macro, "Macros" },
+	{ DISASM_OPT_MACRO, &g_macroon, "Macros" },
 	{ DISASM_OPT_PRINTREAL, &g_printreal, "Print Real Address" },
 	{ DISASM_OPT_PRINTREGS, &g_printregs, "Print Regs" },
 	{ DISASM_OPT_PRINTSWAP, &g_printswap, "Print Swap" },
@@ -599,6 +599,35 @@ SymbolType disasmResolveSymbol(unsigned int PC, char *name, int namelen)
 		{
 			type = s->type;
 			snprintf(name, namelen, "%s", s->name.c_str());
+		}
+	}
+
+	return type;
+}
+
+SymbolType disasmResolveRef(unsigned int PC, char *name, int namelen)
+{
+	SymbolEntry *s;
+	SymbolType type = SYMBOL_NOSYM;
+
+	if(g_syms)
+	{
+		s = (*g_syms)[PC];
+		if((s) && (s->imported.size() > 0))
+		{
+			unsigned int nid = 0;
+			PspLibImport *pImp = s->imported[0];
+
+			for(int i = 0; i < pImp->f_count; i++)
+			{
+				if(strcmp(s->name.c_str(), pImp->funcs[i].name) == 0)
+				{
+					nid = pImp->funcs[i].nid;
+					break;
+				}
+			}
+			type = s->type;
+			snprintf(name, namelen, "/%s/%s/nid:0x%08X", pImp->file, pImp->name, nid);
 		}
 	}
 
@@ -720,7 +749,7 @@ void disasmSetSymAddr(int symaddr)
 
 void disasmSetMacro(int macro)
 {
-	g_macro = macro;
+	g_macroon = macro;
 }
 
 void disasmSetPrintReal(int printreal)
@@ -1223,6 +1252,406 @@ void format_line(char *code, int codelen, const char *addr, unsigned int opcode,
 	}
 }
 
+static char *print_cpureg_xml(int reg, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<gpr>r%d</gpr>", reg);
+
+	return output + len;
+}
+
+static char *print_int_xml(int i, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<imm>%d</imm>", i);
+
+	return output + len;
+}
+
+static char *print_hex_xml(int i, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<imm>0x%X</imm>", i);
+
+	return output + len;
+}
+
+static char *print_imm_xml(int ofs, char *output)
+{
+	int len;
+
+	if(g_hexints)
+	{
+		if((g_signedhex) && (ofs < 0))
+		{
+			int real;
+
+			real = -ofs;
+			len = sprintf(output, "<imm>-0x%X</imm>", real);
+		}
+		else
+		{
+			unsigned int val = ofs;
+			val &= 0xFFFF;
+			len = sprintf(output, "<imm>0x%X</imm>", val);
+		}
+	}
+	else
+	{
+		len = sprintf(output, "<imm>%d</imm>", ofs);
+	}
+
+	return output + len;
+}
+
+static char *print_jump_xml(unsigned int addr, char *output)
+{
+	int len;
+	char symbol[128];
+	int symfound = 0;
+
+	if(g_syms)
+	{
+		symfound = disasmResolveRef(addr, symbol, sizeof(symbol));
+	}
+
+	if(symfound)
+	{
+		len = sprintf(output, "<ref>%s</ref>", symbol);
+	}
+	else
+	{
+		len = sprintf(output, "<ref>0x%08X</ref>", addr);
+	}
+
+	return output + len;
+}
+
+static char *print_ofs_xml(int ofs, int reg, char *output)
+{
+	output = print_imm_xml(ofs, output);
+	output = print_cpureg_xml(reg, output);
+
+	return output;
+}
+
+static char *print_pcofs_xml(int ofs, unsigned int PC, char *output)
+{
+	ofs = ofs * 4;
+
+	return print_jump_xml(PC + 4 + ofs, output);
+}
+
+static char *print_jumpr_xml(int reg, char *output)
+{
+	return print_cpureg_xml(reg, output);
+}
+
+static char *print_syscall_xml(unsigned int syscall, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<syscall>0x%X</syscall>", syscall);
+
+	return output + len;
+}
+
+static char *print_cop0_xml(int reg, char *output)
+{
+	int len;
+
+	if(cop0_regs[reg])
+	{
+		len = sprintf(output, "<cop0>%s</cop0>", cop0_regs[reg]);
+	}
+	else
+	{
+		len = sprintf(output, "<cop0>$%d</cop0>", reg);
+	}
+
+	return output + len;
+}
+
+static char *print_cop1_xml(int reg, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<cop1>$fcr%d</cop1>", reg);
+
+	return output + len;
+}
+
+static char *print_fpureg_xml(int reg, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<fpr>$fpr%02d</fpr>", reg);
+
+	return output + len;
+}
+
+static char *print_debugreg_xml(int reg, char *output)
+{
+	int len;
+
+	if((reg < 16) && (dr_regs[reg]))
+	{
+		len = sprintf(output, "<dreg>%s</dreg>", dr_regs[reg]);
+	}
+	else
+	{
+		len = sprintf(output, "<dreg>$%02d</dreg>\n", reg);
+	}
+
+	return output + len;
+}
+
+static char *print_vfpusingle_xml(int reg, char *output)
+{
+	int len;
+
+	len = sprintf(output, "<vfpu>S%d%d%d</vfpu>", (reg >> 2) & 7, reg & 3, (reg >> 5) & 3);
+
+	return output + len;
+}
+
+static char *print_vfpu_reg_xml(int reg, int offset, char one, char two, char *output)
+{
+	int len;
+
+	if((reg >> 5) & 1)
+	{
+		len = sprintf(output, "<vfpu>%c%d%d%d</vfpu>", two, (reg >> 2) & 7, offset, reg & 3);
+	}
+	else
+	{
+		len = sprintf(output, "<vfpu>%c%d%d%d</vfpu>", one, (reg >> 2) & 7, reg & 3, offset);
+	}
+
+	return output + len;
+}
+
+static char *print_vfpuquad_xml(int reg, char *output)
+{
+	return print_vfpu_reg_xml(reg, 0, 'C', 'R', output);
+}
+
+static char *print_vfpupair_xml(int reg, char *output)
+{
+	if((reg >> 6) & 1)
+	{
+		return print_vfpu_reg_xml(reg, 2, 'C', 'R', output);
+	}
+	else
+	{
+		return print_vfpu_reg_xml(reg, 0, 'C', 'R', output);
+	}
+}
+
+static char *print_vfputriple_xml(int reg, char *output)
+{
+	if((reg >> 6) & 1)
+	{
+		return print_vfpu_reg_xml(reg, 1, 'C', 'R', output);
+	}
+	else
+	{
+		return print_vfpu_reg_xml(reg, 0, 'C', 'R', output);
+	}
+}
+
+static char *print_vfpumpair_xml(int reg, char *output)
+{
+	if((reg >> 6) & 1)
+	{
+		return print_vfpu_reg_xml(reg, 2, 'M', 'E', output);
+	}
+	else
+	{
+		return print_vfpu_reg_xml(reg, 0, 'M', 'E', output);
+	}
+}
+
+static char *print_vfpumtriple_xml(int reg, char *output)
+{
+	if((reg >> 6) & 1)
+	{
+		return print_vfpu_reg_xml(reg, 1, 'M', 'E', output);
+	}
+	else
+	{
+		return print_vfpu_reg_xml(reg, 0, 'M', 'E', output);
+	}
+}
+
+static char *print_vfpumatrix_xml(int reg, char *output)
+{
+	return print_vfpu_reg_xml(reg, 0, 'M', 'E', output);
+}
+
+static char *print_vfpureg_xml(int reg, char type, char *output)
+{
+	switch(type)
+	{
+		case 's': return print_vfpusingle_xml(reg, output);
+				  break;
+		case 'q': return print_vfpuquad_xml(reg, output);
+				  break;
+		case 'p': return print_vfpupair_xml(reg, output);
+				  break;
+		case 't': return print_vfputriple_xml(reg, output);
+				  break;
+		case 'm': return print_vfpumpair_xml(reg, output);
+				  break;
+		case 'n': return print_vfpumtriple_xml(reg, output);
+				  break;
+		case 'o': return print_vfpumatrix_xml(reg, output);
+				  break;
+		default: break;
+	};
+
+	return output;
+}
+
+static void decode_args_xml(unsigned int opcode, unsigned int PC, const char *fmt, char *output)
+{
+	int i = 0;
+	int vmmul = 0;
+	int arg = 0;
+
+	while(fmt[i])
+	{
+		if(fmt[i] == '%')
+		{
+			int len;
+
+			i++;
+			len = sprintf(output, "<arg%d>", arg);
+			output += len;
+			
+			switch(fmt[i])
+			{
+				case 'd': output = print_cpureg_xml(RD(opcode), output);
+						  break;
+				case 't': output = print_cpureg_xml(RT(opcode), output);
+						  break;
+				case 's': output = print_cpureg_xml(RS(opcode), output);
+						  break;
+				case 'i': output = print_imm_xml(IMM(opcode), output);
+						  break;
+				case 'I': output = print_hex_xml(IMMU(opcode), output);
+						  break;
+				case 'o': output = print_ofs_xml(IMM(opcode), RS(opcode), output);
+						  break;
+				case 'O': output = print_pcofs_xml(IMM(opcode), PC, output);
+						  break;
+				case 'V': output = print_ofs_xml(IMM(opcode), RS(opcode), output);
+						  break;
+				case 'j': output = print_jump_xml(JUMP(opcode, PC), output);
+						  break;
+				case 'J': output = print_jumpr_xml(RS(opcode), output);
+						  break;
+				case 'a': output = print_int_xml(SA(opcode), output);
+						  break;
+				case '0': output = print_cop0_xml(RD(opcode), output);
+						  break;
+				case '1': output = print_cop1_xml(RD(opcode), output);
+						  break;
+				case 'p': *output++ = '$';
+						  output = print_int_xml(RD(opcode), output);
+						  break;
+				case 'k': output = print_hex_xml(RT(opcode), output);
+						  break;
+				case 'D': output = print_fpureg_xml(FD(opcode), output);
+						  break;
+				case 'T': output = print_fpureg_xml(FT(opcode), output);
+						  break;
+				case 'S': output = print_fpureg_xml(FS(opcode), output);
+						  break;
+				case 'r': output = print_debugreg_xml(RD(opcode), output);
+						  break;
+				case 'n': output = print_int_xml(RD(opcode) + 1, output);
+						  break;
+				case 'x': if(fmt[i+1]) { output = print_vfpureg_xml(VT(opcode), fmt[i+1], output); i++; }break;
+				case 'y': if(fmt[i+1]) { 
+							  int reg = VS(opcode);
+							  if(vmmul) { if(reg & 0x20) { reg &= 0x5F; } else { reg |= 0x20; } }
+							  output = print_vfpureg_xml(reg, fmt[i+1], output); i++; 
+							  }
+							  break;
+				case 'z': if(fmt[i+1]) { output = print_vfpureg_xml(VD(opcode), fmt[i+1], output); i++; }
+						  break;
+				case 'v': break;
+				case 'X': if(fmt[i+1]) { output = print_vfpureg_xml(VO(opcode), fmt[i+1], output); i++; }
+						  break;
+				case 'Z': output = print_imm_xml(VCC(opcode), output);
+						  break;
+				case 'c': output = print_hex_xml(CODE(opcode), output);
+						  break;
+				case 'C': output = print_syscall_xml(CODE(opcode), output);
+						  break;
+				case 'Y': output = print_ofs_xml(IMM(opcode) & ~3, RS(opcode), output);
+						  break;
+				case '?': vmmul = 1;
+						  break;
+				case 0: goto end;
+				default: break;
+			};
+			len = sprintf(output, "</arg%d>", arg);
+			output += len;
+			arg++;
+			i++;
+		}
+		else
+		{
+			i++;
+		}
+	}
+end:
+
+	*output = 0;
+}
+
+void format_line_xml(char *code, int codelen, const char *addr, unsigned int opcode, const char *name, const char *args)
+{
+	char ascii[17];
+	char *p;
+	int i;
+
+	if(name == NULL)
+	{
+		name = "Unknown";
+		args = "";
+	}
+
+	p = ascii;
+	for(i = 0; i < 4; i++)
+	{
+		unsigned char ch;
+
+		ch = (unsigned char) ((opcode >> (i*8)) & 0xFF);
+		if((ch < 32) || (ch > 126))
+		{
+			ch = '.';
+		}
+		if(g_xmloutput && (ch == '<'))
+		{
+			strcpy(p, "&lt;");
+			p += strlen(p);
+		}
+		else
+		{
+			*p++ = ch;
+		}
+	}
+	*p = 0;
+
+	snprintf(code, codelen, "<name>%s</name><opcode>0x%08X</opcode>%s", name, opcode, args);
+}
+
 const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int *realregs, unsigned int *regmask, int noaddr)
 {
 	static char code[1024];
@@ -1246,14 +1675,14 @@ const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int
 
 	g_regmask = 0;
 
-	if(!g_macro)
+	if(!g_macroon)
 	{
-		size = sizeof(macro) / sizeof(struct Instruction);
+		size = sizeof(g_macro) / sizeof(struct Instruction);
 		for(i = 0; i < size; i++)
 		{
-			if((opcode & macro[i].mask) == macro[i].opcode)
+			if((opcode & g_macro[i].mask) == g_macro[i].opcode)
 			{
-				ix = &macro[i];
+				ix = &g_macro[i];
 				break;
 			}
 		}
@@ -1285,6 +1714,57 @@ const char *disasmInstruction(unsigned int opcode, unsigned int PC, unsigned int
 	}
 
 	format_line(code, sizeof(code), addr, opcode, name, args, noaddr);
+
+	return code;
+}
+
+const char *disasmInstructionXML(unsigned int opcode, unsigned int PC)
+{
+	static char code[1024];
+	const char *name = NULL;
+	char args[1024];
+	char addr[1024];
+	int size;
+	int i;
+	struct Instruction *ix = NULL;
+
+	sprintf(addr, "0x%08X", PC);
+	g_regmask = 0;
+
+	if(!g_macroon)
+	{
+		size = sizeof(g_macro) / sizeof(struct Instruction);
+		for(i = 0; i < size; i++)
+		{
+			if((opcode & g_macro[i].mask) == g_macro[i].opcode)
+			{
+				ix = &g_macro[i];
+				break;
+			}
+		}
+	}
+
+	if(!ix)
+	{
+		size = sizeof(g_inst) / sizeof(struct Instruction);
+		for(i = 0; i < size; i++)
+		{
+			if((opcode & g_inst[i].mask) == g_inst[i].opcode)
+			{
+				ix = &g_inst[i];
+				break;
+			}
+		}
+	}
+
+	if(ix)
+	{
+		decode_args_xml(opcode, PC, ix->fmt, args);
+
+		name = ix->name;
+	}
+
+	format_line_xml(code, sizeof(code), addr, opcode, name, args);
 
 	return code;
 }
