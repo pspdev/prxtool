@@ -1,9 +1,11 @@
 /***************************************************************
  * PRXTool : Utility for PSP executables.
  * (c) TyRaNiD 2k6
+ * (c) hlide 2k7
  *
  * disasm.C - Implementation of a MIPS disassembler
  ***************************************************************/
+
 #include <stdio.h>
 #include <string.h>
 #include "disasm.h"
@@ -22,6 +24,7 @@
  * %a - SA
  * %0 - Cop0 register
  * %1 - Cop1 register
+ * %2? - Cop2 register (? is (s, d))
  * %p - General cop (i.e. numbered) register
  * %n - ins/ext size
  * %r - Debug register
@@ -34,8 +37,8 @@
  * %z? - Vd
  * %X? - Vo (? is (s, q))
  * %Y - VFPU offset
- * %Z - VFPU condition code
- * %v? - VFPU immediate, ? (3, 5, 8)
+ * %Z? - VFPU condition code/name (? is (c, n))
+ * %v? - VFPU immediate, ? (3, 5, 8, k, i, h, r, p? (? is (0, 1, 2, 3, 4, 5, 6, 7)))
  * %c - code (for break)
  * %C - code (for syscall)
  * %? - Indicates vmmul special exception
@@ -59,6 +62,14 @@
 #define VD(op)   (op & 0x7F)
 #define VS(op)   ((op >> 8) & 0x7F)
 #define VT(op)   ((op >> 16) & 0x7F)
+
+// [hlide] new #defines
+#define VED(op)  (op & 0xFF)
+#define VES(op)  ((op >> 8) & 0xFF)
+#define VCN(op)  (op & 0x0F)
+#define VI3(op)  ((op >> 16) & 0x07)
+#define VI5(op)  ((op >> 16) & 0x1F)
+#define VI8(op)  ((op >> 16) & 0xFF)
 
 struct Instruction
 {
@@ -255,20 +266,20 @@ static struct Instruction g_inst[] =
 	{"sub.s",	0x46000001, 0xFFE0003F, "%D, %S, %T", ADDR_TYPE_NONE, 0 },
 	{"swc1",	0xe4000000, 0xFC000000, "%T, %o", ADDR_TYPE_NONE, 0 },
 	{"trunc.w.s",0x4600000D, 0xFFFF003F,"%D, %S", ADDR_TYPE_NONE, 0 },
-	
+
 	/* VPU instructions */
-	{ "bvf",	 0x49000000, 0xFFE30000, "%Z, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B },
-	{ "bvfl",	 0x49020000, 0xFFE30000, "%Z, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B },
-	{ "bvt",	 0x49010000, 0xFFE30000, "%Z, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B },
-	{ "bvtl",	 0x49030000, 0xFFE30000, "%Z, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B },
+	{ "bvf",	 0x49000000, 0xFFE30000, "%Zc, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B }, // [hlide] %Z -> %Zc
+	{ "bvfl",	 0x49020000, 0xFFE30000, "%Zc, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B }, // [hlide] %Z -> %Zc
+	{ "bvt",	 0x49010000, 0xFFE30000, "%Zc, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B }, // [hlide] %Z -> %Zc
+	{ "bvtl",	 0x49030000, 0xFFE30000, "%Zc, %O" , ADDR_TYPE_16, INSTR_TYPE_PSP | INSTR_TYPE_B }, // [hlide] %Z -> %Zc
 	{ "lv.q",	 0xD8000000, 0xFC000002, "%Xq, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "lv.s",	 0xC8000000, 0xFC000000, "%Xs, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "lvl.q",	 0xD4000000, 0xFC000002, "%Xq, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "lvr.q",	 0xD4000002, 0xFC000002, "%Xq, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "mfv",	 0x48600000, 0xFFE0FF80, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "mfvc",	 0x48600000, 0xFFE0FF00, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "mtv",	 0x48E00000, 0xFFE0FF80, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "mtvc",	 0x48E00000, 0xFFE0FF00, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "mfv",	 0x48600000, 0xFFE0FF80, "%t, %zs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%t, %zs"
+	{ "mfvc",	 0x48600000, 0xFFE0FF00, "%t, %2d" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%t, %2d"
+	{ "mtv",	 0x48E00000, 0xFFE0FF80, "%t, %zs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%t, %zs"
+	{ "mtvc",	 0x48E00000, 0xFFE0FF00, "%t, %2d" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%t, %2d"
 	{ "sv.q",	 0xF8000000, 0xFC000002, "%Xq, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "sv.s",	 0xE8000000, 0xFC000000, "%Xs, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "svl.q",	 0xF4000000, 0xFC000002, "%Xq, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -279,7 +290,7 @@ static struct Instruction g_inst[] =
 	{ "vabs.t",	 0xD0018000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vadd.p",	 0x60000080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vadd.q",	 0x60008080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vadd.s",	 0x60000000, 0xFF808080, "%zs, %yz, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vadd.s",	 0x60000000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %yz -> %ys
 	{ "vadd.t",	 0x60008000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vasin.p", 0xD0170080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vasin.q", 0xD0178080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -291,40 +302,40 @@ static struct Instruction g_inst[] =
 	{ "vbfy1.p", 0xD0420080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vbfy1.q", 0xD0428080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vbfy2.q", 0xD0438080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovf.p", 0xD2A80080, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovf.q",0xD2A88080, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovf.s", 0xD2A80000, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovf.t",0xD2A88000, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovt.p", 0xD2A00080, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovt.q",0xD2A08080, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovt.s", 0xD2A00000, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmovt.t",0xD2A08000, 0xFFF88080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.p",	 0x6C000080, 0xFF8080F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.p",	 0x6C000080, 0xFFFF80F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.p",	 0x6C000080, 0xFFFFFFF0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.q",	 0x6C008080, 0xFF8080F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.q",	 0x6C008080, 0xFFFF80F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.q",	 0x6C008080, 0xFFFFFFF0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.s",	 0x6C000000, 0xFF8080F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.s",	 0x6C000000, 0xFFFF80F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.s",	 0x6C000000, 0xFFFFFFF0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.t",	 0x6C008000, 0xFF8080F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.t",	 0x6C008000, 0xFFFF80F0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcmp.t",	 0x6C008000, 0xFFFFFFF0, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vcmovf.p", 0xD2A80080, 0xFFF88080, "%zp, %yp, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v3"
+	{ "vcmovf.q",0xD2A88080, 0xFFF88080, "%zq, %yq, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v3"
+	{ "vcmovf.s", 0xD2A80000, 0xFFF88080, "%zs, %ys, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v3"
+	{ "vcmovf.t",0xD2A88000, 0xFFF88080, "%zt, %yt, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v3"
+	{ "vcmovt.p", 0xD2A00080, 0xFFF88080, "%zp, %yp, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v3"
+	{ "vcmovt.q",0xD2A08080, 0xFFF88080, "%zq, %yq, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v3"
+	{ "vcmovt.s", 0xD2A00000, 0xFFF88080, "%zs, %ys, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v3"
+	{ "vcmovt.t",0xD2A08000, 0xFFF88080, "%zt, %yt, %v3" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v3"
+	{ "vcmp.p",	 0x6C000080, 0xFF8080F0, "%Zn, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %zp, %xp"
+	{ "vcmp.p",	 0x6C000080, 0xFFFF80F0, "%Zn, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %xp"
+	{ "vcmp.p",	 0x6C000080, 0xFFFFFFF0, "%Zn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn"
+	{ "vcmp.q",	 0x6C008080, 0xFF8080F0, "%Zn, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %yq, %xq"
+	{ "vcmp.q",	 0x6C008080, 0xFFFF80F0, "%Zn, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %yq"
+	{ "vcmp.q",	 0x6C008080, 0xFFFFFFF0, "%Zn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn"
+	{ "vcmp.s",	 0x6C000000, 0xFF8080F0, "%Zn, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %ys, %xs"
+	{ "vcmp.s",	 0x6C000000, 0xFFFF80F0, "%Zn, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %ys"
+	{ "vcmp.s",	 0x6C000000, 0xFFFFFFF0, "%Zn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn"
+	{ "vcmp.t",	 0x6C008000, 0xFF8080F0, "%Zn, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %yt, %xt"
+	{ "vcmp.t",	 0x6C008000, 0xFFFF80F0, "%Zn, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%Zn, %yt"
+	{ "vcmp.t",	 0x6C008000, 0xFFFFFFF0, "%Zn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp"
 	{ "vcos.p",	 0xD0130080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vcos.q",	 0xD0138080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vcos.s",	 0xD0130000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vcos.t",	 0xD0138000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vcrs.t",	 0x66808000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vcrsp.t", 0xF2808000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcst.p",	 0xD0600080, 0xFFE0FF80, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcst.q",	 0xD0608080, 0xFFE0FF80, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcst.s",	 0xD0600000, 0xFFE0FF80, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vcst.t",	 0xD0608000, 0xFFE0FF80, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vcst.p",	 0xD0600080, 0xFFE0FF80, "%zp, %vk" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] "%zp, %yp, %xp" -> "%zp, %vk"
+	{ "vcst.q",	 0xD0608080, 0xFFE0FF80, "%zq, %vk" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] "%zq, %yq, %xq" -> "%zq, %vk"
+	{ "vcst.s",	 0xD0600000, 0xFFE0FF80, "%zs, %vk" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] "%zs, %ys, %xs" -> "%zs, %vk"
+	{ "vcst.t",	 0xD0608000, 0xFFE0FF80, "%zt, %vk" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] "%zt, %yt, %xt" -> "%zt, %vk"
 	{ "vdet.p",	 0x67000080, 0xFF808080, "%zs, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vdiv.p",	 0x63800080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vdiv.q",	 0x63808080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vdiv.s",	 0x63800000, 0xFF808080, "%zs, %yz, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vdiv.s",	 0x63800000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %yz -> %ys
 	{ "vdiv.t",	 0x63808000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vdot.p",	 0x64800080, 0xFF808080, "%zs, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vdot.q",	 0x64808080, 0xFF808080, "%zs, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -333,50 +344,50 @@ static struct Instruction g_inst[] =
 	{ "vexp2.q", 0xD0148080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vexp2.s", 0xD0140000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vexp2.t", 0xD0148000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2h.p",	 0xD0320080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2h.q",	 0xD0328080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2id.p", 0xD2600080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2id.q", 0xD2608080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2id.s", 0xD2600000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2id.t", 0xD2608000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2in.p", 0xD2000080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2in.q", 0xD2008080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2in.s", 0xD2000000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2in.t", 0xD2008000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iu.p", 0xD2400080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iu.q", 0xD2408080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iu.s", 0xD2400000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iu.t", 0xD2408000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iz.p", 0xD2200080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iz.q", 0xD2208080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iz.s", 0xD2200000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vf2iz.t", 0xD2208000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vf2h.p",	 0xD0320080, 0xFFFF8080, "%zs, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zs
+	{ "vf2h.q",	 0xD0328080, 0xFFFF8080, "%zp, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq -> %zp
+	{ "vf2id.p", 0xD2600080, 0xFFE08080, "%zp, %yp, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v5"
+	{ "vf2id.q", 0xD2608080, 0xFFE08080, "%zq, %yq, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v5"
+	{ "vf2id.s", 0xD2600000, 0xFFE08080, "%zs, %ys, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v5"
+	{ "vf2id.t", 0xD2608000, 0xFFE08080, "%zt, %yt, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v5"
+	{ "vf2in.p", 0xD2000080, 0xFFE08080, "%zp, %yp, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v5"
+	{ "vf2in.q", 0xD2008080, 0xFFE08080, "%zq, %yq, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v5"
+	{ "vf2in.s", 0xD2000000, 0xFFE08080, "%zs, %ys, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v5"
+	{ "vf2in.t", 0xD2008000, 0xFFE08080, "%zt, %yt, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v5"
+	{ "vf2iu.p", 0xD2400080, 0xFFE08080, "%zp, %yp, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v5"
+	{ "vf2iu.q", 0xD2408080, 0xFFE08080, "%zq, %yq, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v5"
+	{ "vf2iu.s", 0xD2400000, 0xFFE08080, "%zs, %ys, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v5"
+	{ "vf2iu.t", 0xD2408000, 0xFFE08080, "%zt, %yt, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v5"
+	{ "vf2iz.p", 0xD2200080, 0xFFE08080, "%zp, %yp, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v5"
+	{ "vf2iz.q", 0xD2208080, 0xFFE08080, "%zq, %yq, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v5"
+	{ "vf2iz.s", 0xD2200000, 0xFFE08080, "%zs, %ys, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v5"
+	{ "vf2iz.t", 0xD2208000, 0xFFE08080, "%zt, %yt, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v5"
 	{ "vfad.p",	 0xD0460080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vfad.q",	 0xD0468080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vfad.t",	 0xD0468000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vfim.s",	 0xDF800000, 0xFF800000, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vfim.s",	 0xDF800000, 0xFF800000, "%xs, %vh" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%xs, %vh"
 	{ "vflush",	 0xFFFF040D, 0xFFFFFFFF, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vh2f.p",	 0xD0330080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vh2f.s",	 0xD0330000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vhdp.p",	 0x66000080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vhdp.q",	 0x66008080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vhdp.t",	 0x66008000, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vhtfm2.p", 0xF0800000, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vhtfm3.t",0xF1000080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vhtfm4.q",0xF1808000, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2c.q",	 0xD03D8080, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2f.p",	 0xD2800080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2f.q",	 0xD2808080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2f.s",	 0xD2800000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2f.t",	 0xD2808000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2s.p",	 0xD03F0080, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2s.q",	 0xD03F8080, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2uc.q", 0xD03C8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2us.p", 0xD03E0080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vi2us.q", 0xD03E8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vh2f.p",	 0xD0330080, 0xFFFF8080, "%zq, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zq
+	{ "vh2f.s",	 0xD0330000, 0xFFFF8080, "%zp, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zs -> %zp
+	{ "vhdp.p",	 0x66000080, 0xFF808080, "%zs, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %yp, %xp"
+	{ "vhdp.q",	 0x66008080, 0xFF808080, "%zs, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %yq, %xq"
+	{ "vhdp.t",	 0x66008000, 0xFF808080, "%zs, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %yt, %xt"
+	{ "vhtfm2.p", 0xF0800000, 0xFF808080, "%zp, %ym, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %ym, %xp"
+	{ "vhtfm3.t",0xF1000080, 0xFF808080, "%zt, %yn, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yn, %xt"
+	{ "vhtfm4.q",0xF1808000, 0xFF808080, "%zq, %yo, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yo, %xq"
+	{ "vi2c.q",	 0xD03D8080, 0xFFFF8080, "%zs, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %yq"
+	{ "vi2f.p",	 0xD2800080, 0xFFE08080, "%zp, %yp, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yp, %v5"
+	{ "vi2f.q",	 0xD2808080, 0xFFE08080, "%zq, %yq, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %v5"
+	{ "vi2f.s",	 0xD2800000, 0xFFE08080, "%zs, %ys, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %ys, %v5"
+	{ "vi2f.t",	 0xD2808000, 0xFFE08080, "%zt, %yt, %v5" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yt, %v5"
+	{ "vi2s.p",	 0xD03F0080, 0xFFFF8080, "%zs, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %yp"
+	{ "vi2s.q",	 0xD03F8080, 0xFFFF8080, "%zp, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %yq"
+	{ "vi2uc.q", 0xD03C8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zq
+	{ "vi2us.p", 0xD03E0080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zq
+	{ "vi2us.q", 0xD03E8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zq
 	{ "vidt.p",	 0xD0030080, 0xFFFFFF80, "%zp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vidt.q",	 0xD0038080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "viim.s",	 0xDF000000, 0xFF800000, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "viim.s",	 0xDF000000, 0xFF800000, "%xs, %vi" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%xs, %vi"
 	{ "vlgb.s",	 0xD0370000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vlog2.p", 0xD0150080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vlog2.q", 0xD0158080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -386,20 +397,20 @@ static struct Instruction g_inst[] =
 	{ "vmax.q",	 0x6D808080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmax.s",	 0x6D800000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmax.t",	 0x6D808000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmfvc",	 0xD0500000, 0xFFFF0080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmidt.p", 0xF3830080, 0xFFFFFF80, "%zp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmidt.q", 0xF3838080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmidt.t", 0xF3838000, 0xFFFFFF80, "%zt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vmfvc",	 0xD0500000, 0xFFFF0080, "%zs, %2s" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zs, %2s"
+	{ "vmidt.p", 0xF3830080, 0xFFFFFF80, "%zm" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zm
+	{ "vmidt.q", 0xF3838080, 0xFFFFFF80, "%zo" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq -> %zo
+	{ "vmidt.t", 0xF3838000, 0xFFFFFF80, "%zn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zt -> %zn
 	{ "vmin.p",	 0x6D000080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmin.q",	 0x6D008080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmin.s",	 0x6D000000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmin.t",	 0x6D008000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmmov.p", 0xF3800080, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vmmov.p", 0xF3800080, 0xFFFF8080, "%zm, %ym" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zm, %ym"
 	{ "vmmov.q", 0xF3808080, 0xFFFF8080, "%zo, %yo" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmmov.t", 0xF3808000, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmmul.p", 0xF0000080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vmmov.t", 0xF3808000, 0xFFFF8080, "%zn, %yn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zn, %yn"
+	{ "vmmul.p", 0xF0000080, 0xFF808080, "%?%zm, %ym, %xm" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%?%zm, %ym, %xm"
 	{ "vmmul.q", 0xF0008080, 0xFF808080, "%?%zo, %yo, %xo" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmmul.t", 0xF0008000, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vmmul.t", 0xF0008000, 0xFF808080, "%?%zn, %yn, %xn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%?%zn, %yn, %xn"
 	{ "vmone.p", 0xF3870080, 0xFFFFFF80, "%zp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmone.q", 0xF3878080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmone.t", 0xF3878000, 0xFFFFFF80, "%zt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -407,17 +418,17 @@ static struct Instruction g_inst[] =
 	{ "vmov.q",	 0xD0008080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmov.s",	 0xD0000000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmov.t",	 0xD0008000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmscl.p", 0xF2000080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmscl.q", 0xF2008080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmscl.t", 0xF2008000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmtvc",	 0xD0510000, 0xFFFF8000, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vmscl.p", 0xF2000080, 0xFF808080, "%zm, %ym, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp, %yp, %xp -> %zm, %ym, %xs
+	{ "vmscl.q", 0xF2008080, 0xFF808080, "%zo, %yo, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq, %yq, %xp -> %zo, %yo, %xs
+	{ "vmscl.t", 0xF2008000, 0xFF808080, "%zn, %yn, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zt, %yt, %xp -> %zn, %yn, %xs
+	{ "vmtvc",	 0xD0510000, 0xFFFF8000, "%2d, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%2d, %ys"
 	{ "vmul.p",	 0x64000080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmul.q",	 0x64008080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmul.s",	 0x64000000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vmul.t",	 0x64008000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmzero.p", 0xF3860080, 0xFFFFFF80, "%zp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmzero.q",0xF3868080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vmzero.t",0xF3868000, 0xFFFFFF80, "%zt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vmzero.p", 0xF3860080, 0xFFFFFF80, "%zm" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zm
+	{ "vmzero.q",0xF3868080, 0xFFFFFF80, "%zo" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq -> %zo
+	{ "vmzero.t",0xF3868000, 0xFFFFFF80, "%zn" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zt -> %zn
 	{ "vneg.p",	 0xD0020080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vneg.q",	 0xD0028080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vneg.s",	 0xD0020000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -439,10 +450,10 @@ static struct Instruction g_inst[] =
 	{ "vone.q",	 0xD0078080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vone.s",	 0xD0070000, 0xFFFFFF80, "%zs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vone.t",	 0xD0078000, 0xFFFFFF80, "%zt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vpfxd",	 0xDE000000, 0xFF000000, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vpfxs",	 0xDC000000, 0xFF000000, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vpfxt",	 0xDD000000, 0xFF000000, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vqmul.q", 0xF2808080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vpfxd",	 0xDE000000, 0xFF000000, "[%vp4, %vp5, %vp6, %vp7]" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "[%vp4, %vp5, %vp6, %vp7]"
+	{ "vpfxs",	 0xDC000000, 0xFF000000, "[%vp0, %vp1, %vp2, %vp3]" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "[%vp0, %vp1, %vp2, %vp3]"
+	{ "vpfxt",	 0xDD000000, 0xFF000000, "[%vp0, %vp1, %vp2, %vp3]" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "[%vp0, %vp1, %vp2, %vp3]"
+	{ "vqmul.q", 0xF2808080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yq, %xq"
 	{ "vrcp.p",	 0xD0100080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrcp.q",	 0xD0108080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrcp.s",	 0xD0100000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -464,15 +475,15 @@ static struct Instruction g_inst[] =
 	{ "vrndi.s", 0xD0210000, 0xFFFFFF80, "%zs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrndi.t", 0xD0218000, 0xFFFFFF80, "%zt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrnds.s", 0xD0200000, 0xFFFF80FF, "%ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vrot.p",	 0xF3A00080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vrot.q",	 0xF3A08080, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vrot.t",	 0xF3A08000, 0xFFE08080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vrot.p",	 0xF3A00080, 0xFFE08080, "%zp, %ys, %vr" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %ys, %vr"
+	{ "vrot.q",	 0xF3A08080, 0xFFE08080, "%zq, %ys, %vr" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %ys, %vr"
+	{ "vrot.t",	 0xF3A08000, 0xFFE08080, "%zt, %ys, %vr" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %ys, %vr"
 	{ "vrsq.p",	 0xD0110080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrsq.q",	 0xD0118080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrsq.s",	 0xD0110000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vrsq.t",	 0xD0118000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vs2i.p",	 0xD03B0080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vs2i.s",	 0xD03B0000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vs2i.p",	 0xD03B0080, 0xFFFF8080, "%zq, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zq
+	{ "vs2i.s",	 0xD03B0000, 0xFFFF8080, "%zp, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zs -> %zp
 	{ "vsat0.p", 0xD0040080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsat0.q", 0xD0048080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsat0.s", 0xD0040000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -483,9 +494,9 @@ static struct Instruction g_inst[] =
 	{ "vsat1.t", 0xD0058000, 0xFFFF8080, "%zt, %yt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsbn.s",	 0x61000000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsbz.s",	 0xD0360000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vscl.p",	 0x65000080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vscl.q",	 0x65008080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vscl.t",	 0x65008000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vscl.p",	 0x65000080, 0xFF808080, "%zp, %yp, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %xp -> %xs
+	{ "vscl.q",	 0x65008080, 0xFF808080, "%zq, %yq, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %xq -> %xs
+	{ "vscl.t",	 0x65008000, 0xFF808080, "%zt, %yt, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %xt -> %xs
 	{ "vscmp.p", 0x6E800080, 0xFF808080, "%zp, %yp, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vscmp.q", 0x6E808080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vscmp.s", 0x6E800000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -506,8 +517,8 @@ static struct Instruction g_inst[] =
 	{ "vslt.q",	 0x6F808080, 0xFF808080, "%zq, %yq, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vslt.s",	 0x6F800000, 0xFF808080, "%zs, %ys, %xs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vslt.t",	 0x6F808000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vsocp.p", 0xD0450080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vsocp.s", 0xD0450000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vsocp.p", 0xD0450080, 0xFFFF8080, "%zq, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zp -> %zq
+	{ "vsocp.s", 0xD0450000, 0xFFFF8080, "%zp, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zs -> %zp
 	{ "vsqrt.p", 0xD0160080, 0xFFFF8080, "%zp, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsqrt.q", 0xD0168080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsqrt.s", 0xD0160000, 0xFFFF8080, "%zs, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -522,16 +533,16 @@ static struct Instruction g_inst[] =
 	{ "vsub.t",	 0x60808000, 0xFF808080, "%zt, %yt, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsync",	 0xFFFF0000, 0xFFFF0000, "%I" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vsync",	 0xFFFF0320, 0xFFFFFFFF, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vt4444.q",0xD0598080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vt5551.q",0xD05A8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vt5650.q",0xD05B8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vtfm2.p", 0xF0800080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vtfm3.t", 0xF1008000, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vtfm4.q", 0xF1808080, 0xFF808080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vus2i.p", 0xD03A0080, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vus2i.s", 0xD03A0000, 0xFFFF8080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vwb.q",	 0xF8000002, 0xFC000002, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "vwbn.s",	 0xD3000000, 0xFF008080, "" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vt4444.q",0xD0598080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq -> %zp
+	{ "vt5551.q",0xD05A8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq -> %zp
+	{ "vt5650.q",0xD05B8080, 0xFFFF8080, "%zq, %yq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] %zq -> %zp
+	{ "vtfm2.p", 0xF0800080, 0xFF808080, "%zp, %ym, %xp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %ym, %xp"
+	{ "vtfm3.t", 0xF1008000, 0xFF808080, "%zt, %yn, %xt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zt, %yn, %xt"
+	{ "vtfm4.q", 0xF1808080, 0xFF808080, "%zq, %yo, %xq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yo, %xq"
+	{ "vus2i.p", 0xD03A0080, 0xFFFF8080, "%zq, %yp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zq, %yp"
+	{ "vus2i.s", 0xD03A0000, 0xFFFF8080, "%zp, %ys" , ADDR_TYPE_NONE, INSTR_TYPE_PSP }, // [hlide] added "%zp, %ys"
+	{ "vwb.q",	 0xF8000002, 0xFC000002, "%Xq, %Y" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "vwbn.s",	 0xD3000000, 0xFF008080, "%zs, %xs, %I" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vzero.p", 0xD0060080, 0xFFFFFF80, "%zp" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vzero.q", 0xD0068080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vzero.s", 0xD0060000, 0xFFFFFF80, "%zs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
@@ -548,12 +559,11 @@ static const char *cop0_regs[32] =
 	NULL, "EBase", NULL, NULL, "TagLo", "TagHi", "ErrorPC", NULL
 };
 
-static const char *dr_regs[16] = 
+static const char * dr_regs[16] = 
 {
 	"DRCNTL", "DEPC", "DDATA0", "DDATA1", "IBC", "DBC", NULL, NULL, 
 	"IBA", "IBAM", NULL, NULL, "DBA", "DBAM", "DBD", "DBDM"
 };
-
 
 /* TODO: Add a register state block so we can convert lui/addiu to li */
 
@@ -972,6 +982,342 @@ static char *print_cop1(int reg, char *output)
 	return output + len;
 }
 
+// [hlide] added vfpu_extra_regs
+static const char * const vfpu_extra_regs[] =
+{
+	"VFPU_PFXS",
+	"VFPU_PFXT",
+	"VFPU_PFXD",
+	"VFPU_CC ",
+	"VFPU_INF4",
+	NULL,
+	NULL,
+	"VFPU_REV",
+	"VFPU_RCX0",
+	"VFPU_RCX1",
+	"VFPU_RCX2",
+	"VFPU_RCX3",
+	"VFPU_RCX4",
+	"VFPU_RCX5",
+	"VFPU_RCX6",
+	"VFPU_RCX7"
+};
+
+// [hlide] added print_cop2
+static char *print_cop2(int reg, char *output)
+{
+	int len;
+
+	if ((reg >= 128) && (reg < 128+16) && (vfpu_extra_regs[reg - 128]))
+	{
+		len = sprintf(output, "%s", vfpu_extra_regs[reg - 128]);
+	}
+	else
+	{
+		len = sprintf(output, "$%d", reg);
+	}
+
+	return output + len;
+}
+
+// [hlide] added vfpu_cond_names
+static const char * const vfpu_cond_names[16] =
+{
+  "FL",  "EQ",  "LT",  "LE",
+  "TR",  "NE",  "GE",  "GT",
+  "EZ",  "EN",  "EI",  "ES",
+  "NZ",  "NN",  "NI",  "NS"
+};
+
+// [hlide] added print_vfpu_cond
+static char *print_vfpu_cond(int cond, char *output)
+{
+	int len;
+
+	if ((cond >= 0) && (cond < 16))
+	{
+		len = sprintf(output, "%s", vfpu_cond_names[cond]);
+	}
+	else
+	{
+		len = sprintf(output, "%d", cond);
+	}
+
+	return output + len;
+}
+
+// [hlide] added vfpu_const_names
+static const char * const vfpu_const_names[20] =
+{
+  "",
+  "VFPU_HUGE",
+  "VFPU_SQRT2",
+  "VFPU_SQRT1_2",
+  "VFPU_2_SQRTPI",
+  "VFPU_2_PI",
+  "VFPU_1_PI",
+  "VFPU_PI_4",
+  "VFPU_PI_2",
+  "VFPU_PI",
+  "VFPU_E",
+  "VFPU_LOG2E",
+  "VFPU_LOG10E",
+  "VFPU_LN2",
+  "VFPU_LN10",
+  "VFPU_2PI",
+  "VFPU_PI_6",
+  "VFPU_LOG10TWO",
+  "VFPU_LOG2TEN",
+  "VFPU_SQRT3_2"
+};
+
+// [hlide] added print_vfpu_const
+static char *print_vfpu_const(int k, char *output)
+{
+	int len;
+
+	if ((k > 0) && (k < 20))
+	{
+		len = sprintf(output, "%s", vfpu_const_names[k]);
+	}
+	else
+	{
+		len = sprintf(output, "%d", k);
+	}
+
+	return output + len;
+}
+
+/* VFPU 16-bit floating-point format. */
+#define VFPU_FLOAT16_EXP_MAX	0x1f
+#define VFPU_SH_FLOAT16_SIGN	15
+#define VFPU_MASK_FLOAT16_SIGN	0x1
+#define VFPU_SH_FLOAT16_EXP	10
+#define VFPU_MASK_FLOAT16_EXP	0x1f
+#define VFPU_SH_FLOAT16_FRAC	0
+#define VFPU_MASK_FLOAT16_FRAC	0x3ff
+
+// [hlide] added print_vfpu_halffloat
+static char *print_vfpu_halffloat(int l, char *output)
+{
+	int len;
+
+	/* Convert a VFPU 16-bit floating-point number to IEEE754. */
+	union float2int
+	{
+		unsigned int i;
+		float f;
+	} float2int;
+	unsigned short float16 = l & 0xFFFF;
+	unsigned int sign = (float16 >> VFPU_SH_FLOAT16_SIGN) & VFPU_MASK_FLOAT16_SIGN;
+	int exponent = (float16 >> VFPU_SH_FLOAT16_EXP) & VFPU_MASK_FLOAT16_EXP;
+	unsigned int fraction = float16 & VFPU_MASK_FLOAT16_FRAC;
+	char signchar = '+' + ((sign == 1) * 2);
+
+	if (exponent == VFPU_FLOAT16_EXP_MAX)
+	{
+		if (fraction == 0)
+			len = sprintf(output, "%cInf", signchar);
+		else
+			len = sprintf(output, "%cNaN", signchar);
+	}
+	else if (exponent == 0 && fraction == 0)
+	{
+		len = sprintf(output, "%c0", signchar);
+	}
+	else
+	{
+		if (exponent == 0)
+		{
+			do
+			{
+				fraction <<= 1;
+				exponent--;
+			}
+			while (!(fraction & (VFPU_MASK_FLOAT16_FRAC + 1)));
+
+			fraction &= VFPU_MASK_FLOAT16_FRAC;
+		}
+
+		/* Convert to 32-bit single-precision IEEE754. */
+		float2int.i = sign << 31;
+		float2int.i |= (exponent + 112) << 23;
+		float2int.i |= fraction << 13;
+		len = sprintf(output, "%g", float2int.f);
+	}
+
+	return output + len;
+}
+
+// [hlide] added pfx_cst_names
+static const char * const pfx_cst_names[8] =
+{
+  "0",  "1",  "2",  "1/2",  "3",  "1/3",  "1/4",  "1/6"
+};
+
+// [hlide] added pfx_swz_names
+static const char * const pfx_swz_names[4] =
+{
+  "x",  "y",  "z",  "w"
+};
+
+// [hlide] added pfx_sat_names
+static const char * const pfx_sat_names[4] =
+{
+  "",  "[0:1]",  "",  "[-1:1]"
+};
+
+/* VFPU prefix instruction operands.  The *_SH_* values really specify where
+   the bitfield begins, as VFPU prefix instructions have four operands
+   encoded within the immediate field. */
+#define VFPU_SH_PFX_NEG		16
+#define VFPU_MASK_PFX_NEG	0x1	/* Negation. */
+#define VFPU_SH_PFX_CST		12
+#define VFPU_MASK_PFX_CST	0x1	/* Constant. */
+#define VFPU_SH_PFX_ABS_CSTHI	8
+#define VFPU_MASK_PFX_ABS_CSTHI	0x1	/* Abs/Constant (bit 2). */
+#define VFPU_SH_PFX_SWZ_CSTLO	0
+#define VFPU_MASK_PFX_SWZ_CSTLO	0x3	/* Swizzle/Constant (bits 0-1). */
+#define VFPU_SH_PFX_MASK	8
+#define VFPU_MASK_PFX_MASK	0x1	/* Mask. */
+#define VFPU_SH_PFX_SAT		0
+#define VFPU_MASK_PFX_SAT	0x3	/* Saturation. */
+
+// [hlide] added print_vfpu_prefix
+static char *print_vfpu_prefix(int l, unsigned int pos, char *output)
+{
+	int len = 0;
+
+	switch (pos)
+	{
+	case '0':
+	case '1':
+	case '2':
+	case '3':
+		{
+			unsigned int base = '0';
+			unsigned int negation = (l >> (pos - (base - VFPU_SH_PFX_NEG))) & VFPU_MASK_PFX_NEG;
+			unsigned int constant = (l >> (pos - (base - VFPU_SH_PFX_CST))) & VFPU_MASK_PFX_CST;
+			unsigned int abs_consthi = (l >> (pos - (base - VFPU_SH_PFX_ABS_CSTHI))) & VFPU_MASK_PFX_ABS_CSTHI;
+			unsigned int swz_constlo = (l >> ((pos - base) * 2)) & VFPU_MASK_PFX_SWZ_CSTLO;
+
+			if (negation)
+				len = sprintf(output, "-");
+			if (constant)
+			{
+				len += sprintf(output, "%s", pfx_cst_names[(abs_consthi << 2) | swz_constlo]);
+			}
+			else
+			{
+				if (abs_consthi)
+					len += sprintf(output, "|%s|", pfx_swz_names[swz_constlo]);
+				else
+					len += sprintf(output, "%s", pfx_swz_names[swz_constlo]);
+			}
+		}
+		break;
+
+	case '4':
+	case '5':
+	case '6':
+	case '7':
+		{
+			unsigned int base = '4';
+			unsigned int mask = (l >> (pos - (base - VFPU_SH_PFX_MASK))) & VFPU_MASK_PFX_MASK;
+			unsigned int saturation = (l >> ((pos - base) * 2)) & VFPU_MASK_PFX_SAT;
+
+			if (mask)
+				len += sprintf(output, "m");
+			else
+				len += sprintf(output, "%s", pfx_sat_names[saturation]);
+		}
+		break;
+	}
+
+	return output + len;
+}
+
+/* Special handling of the vrot instructions. */
+#define VFPU_MASK_OP_SIZE	0x8080	/* Masks the operand size (pair, triple, quad). */
+#define VFPU_OP_SIZE_PAIR	0x80
+#define VFPU_OP_SIZE_TRIPLE	0x8000
+#define VFPU_OP_SIZE_QUAD	0x8080
+/* Note that these are within the rotators field, and not the full opcode. */
+#define VFPU_SH_ROT_HI		2
+#define VFPU_MASK_ROT_HI	0x3
+#define VFPU_SH_ROT_LO		0
+#define VFPU_MASK_ROT_LO	0x3
+#define VFPU_SH_ROT_NEG		4	/* Negation. */
+#define VFPU_MASK_ROT_NEG	0x1
+
+// [hlide] added print_vfpu_rotator
+static char *print_vfpu_rotator(int l, char *output)
+{
+	int len;
+
+	const char *elements[4];
+
+	unsigned int opcode = l & VFPU_MASK_OP_SIZE;
+	unsigned int rotators = (l >> 16) & 0x1f;
+	unsigned int opsize, rothi, rotlo, negation, i;
+
+	/* Determine the operand size so we'll know how many elements to output. */
+	if (opcode == VFPU_OP_SIZE_PAIR)
+		opsize = 2;
+	else if (opcode == VFPU_OP_SIZE_TRIPLE)
+		opsize = 3;
+	else
+		opsize = (opcode == VFPU_OP_SIZE_QUAD) * 4;	/* Sanity check. */
+
+	rothi = (rotators >> VFPU_SH_ROT_HI) & VFPU_MASK_ROT_HI;
+	rotlo = (rotators >> VFPU_SH_ROT_LO) & VFPU_MASK_ROT_LO;
+	negation = (rotators >> VFPU_SH_ROT_NEG) & VFPU_MASK_ROT_NEG;
+
+	if (rothi == rotlo)
+	{
+		if (negation)
+		{
+			elements[0] = "-s";
+			elements[1] = "-s";
+			elements[2] = "-s";
+			elements[3] = "-s";
+		}
+		else
+		{
+			elements[0] = "s";
+			elements[1] = "s";
+			elements[2] = "s";
+			elements[3] = "s";
+		}
+	}
+	else
+	{
+		elements[0] = "0";
+		elements[1] = "0";
+		elements[2] = "0";
+		elements[3] = "0";
+	}
+	if (negation)
+		elements[rothi] = "-s";
+	else
+		elements[rothi] = "s";
+	elements[rotlo] = "c";
+
+	len = sprintf(output, "[");
+
+	for (i = 0;;)
+	{
+		len += sprintf(output, "%s", elements[i++]);
+		if (i >= opsize)
+			break;
+		sprintf(output, " ,");
+	}
+
+	len += sprintf(output, "]");
+
+	return output + len;
+}
+
 static char *print_fpureg(int reg, char *output)
 {
 	int len;
@@ -1145,6 +1491,12 @@ static void decode_args(unsigned int opcode, unsigned int PC, const char *fmt, c
 				case 'p': *output++ = '$';
 						  output = print_int(RD(opcode), output);
 						  break;
+				case '2': // [hlide] added %2? (? is d, s)
+					switch (fmt[i+1]) {
+					case 'd' : output = print_cop2(VED(opcode), output); i++; break;
+					case 's' : output = print_cop2(VES(opcode), output); i++; break;
+					}
+					break;
 				case 'k': output = print_hex(RT(opcode), output);
 						  break;
 				case 'D': output = print_fpureg(FD(opcode), output);
@@ -1166,11 +1518,27 @@ static void decode_args(unsigned int opcode, unsigned int PC, const char *fmt, c
 							  break;
 				case 'z': if(fmt[i+1]) { output = print_vfpureg(VD(opcode), fmt[i+1], output); i++; }
 						  break;
-				case 'v': break;
+				case 'v': // [hlide] completed %v? (? is 3, 5, 8, k, i, h, r, p? (? is (0, 1, 2, 3, 4, 5, 6, 7) ) )
+					switch (fmt[i+1]) {
+					case '3' : output = print_int(VI3(opcode), output); i++; break;
+					case '5' : output = print_int(VI5(opcode), output); i++; break;
+					case '8' : output = print_int(VI8(opcode), output); i++; break;
+					case 'k' : output = print_vfpu_const(VI5(opcode), output); i++; break;
+					case 'i' : output = print_int(IMM(opcode), output); i++; break;
+					case 'h' : output = print_vfpu_halffloat(opcode, output); i++; break;
+					case 'r' : output = print_vfpu_rotator(opcode, output); i++; break;
+					case 'p' : if (fmt[i+2]) { output = print_vfpu_prefix(opcode, fmt[i+2], output); i += 2; }
+							   break;
+					}
+					break;
 				case 'X': if(fmt[i+1]) { output = print_vfpureg(VO(opcode), fmt[i+1], output); i++; }
 						  break;
-				case 'Z': output = print_imm(VCC(opcode), output);
-						  break;
+				case 'Z': // [hlide] modified %Z to %Z? (? is c, n)
+					switch (fmt[i+1]) {
+					case 'c' : output = print_imm(VCC(opcode), output); i++; break;
+					case 'n' : output = print_vfpu_cond(VCN(opcode), output); i++; break;
+					}
+					break;
 				case 'c': output = print_hex(CODE(opcode), output);
 						  break;
 				case 'C': output = print_syscall(CODE(opcode), output);
@@ -1384,6 +1752,11 @@ static char *print_cop1_xml(int reg, char *output)
 	return output + len;
 }
 
+static char *print_cop2_xml(int reg, char *output)
+{
+	return print_cop2(reg, output);
+}
+
 static char *print_fpureg_xml(int reg, char *output)
 {
 	int len;
@@ -1563,6 +1936,12 @@ static void decode_args_xml(unsigned int opcode, unsigned int PC, const char *fm
 				case 'p': *output++ = '$';
 						  output = print_int_xml(RD(opcode), output);
 						  break;
+				case '2': // [hlide] added %2? (? is d, s)
+					switch (fmt[i+1]) {
+					case 'd' : output = print_cop2_xml(VED(opcode), output); i++; break;
+					case 's' : output = print_cop2_xml(VES(opcode), output); i++; break;
+					}
+					break;
 				case 'k': output = print_hex_xml(RT(opcode), output);
 						  break;
 				case 'D': output = print_fpureg_xml(FD(opcode), output);
@@ -1584,11 +1963,27 @@ static void decode_args_xml(unsigned int opcode, unsigned int PC, const char *fm
 							  break;
 				case 'z': if(fmt[i+1]) { output = print_vfpureg_xml(VD(opcode), fmt[i+1], output); i++; }
 						  break;
-				case 'v': break;
+				case 'v': // [hlide] completed %v? (? is 3, 5, 8, k, i, h, r, p? (? is (0, 1, 2, 3, 4, 5, 6, 7) ) )
+					switch (fmt[i+1]) {
+					case '3' : output = print_int_xml(VI3(opcode), output); i++; break;
+					case '5' : output = print_int_xml(VI5(opcode), output); i++; break;
+					case '8' : output = print_int_xml(VI8(opcode), output); i++; break;
+					case 'k' : output = print_vfpu_const(VI5(opcode), output); i++; break;
+					case 'i' : output = print_int_xml(IMM(opcode), output); i++; break;
+					case 'h' : output = print_vfpu_halffloat(opcode, output); i++; break;
+					case 'r' : output = print_vfpu_rotator(opcode, output); i++; break;
+					case 'p' : if (fmt[i+2]) { output = print_vfpu_prefix(opcode, fmt[i+2], output); i += 2; }
+							   break;
+					}
+					break;
 				case 'X': if(fmt[i+1]) { output = print_vfpureg_xml(VO(opcode), fmt[i+1], output); i++; }
 						  break;
-				case 'Z': output = print_imm_xml(VCC(opcode), output);
-						  break;
+				case 'Z':
+					switch (fmt[i+1]) {
+					case 'c' : output = print_imm_xml(VCC(opcode), output); i++; break;
+					case 'n' : output = print_imm_xml(VCN(opcode), output); i++; break;
+					}
+					break;
 				case 'c': output = print_hex_xml(CODE(opcode), output);
 						  break;
 				case 'C': output = print_syscall_xml(CODE(opcode), output);
