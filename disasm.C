@@ -1,7 +1,6 @@
 /***************************************************************
  * PRXTool : Utility for PSP executables.
  * (c) TyRaNiD 2k6
- * (c) hlide 2k7
  *
  * disasm.C - Implementation of a MIPS disassembler
  ***************************************************************/
@@ -1757,6 +1756,216 @@ static char *print_cop2_xml(int reg, char *output)
 	return print_cop2(reg, output);
 }
 
+// [hlide] added print_vfpu_cond_xml
+static char *print_vfpu_cond_xml(int cond, char *output)
+{
+	int len;
+
+	if ((cond >= 0) && (cond < 16))
+	{
+		len = sprintf(output, "<cond>%s</cond>", vfpu_cond_names[cond]);
+	}
+	else
+	{
+		len = sprintf(output, "<imm>%d</imm>", cond);
+	}
+
+	return output + len;
+}
+
+// [hlide] added print_vfpu_const_xml_xml
+static char *print_vfpu_const_xml(int k, char *output)
+{
+	int len;
+
+	if ((k > 0) && (k < 20))
+	{
+		len = sprintf(output, "<const>%s</const>", vfpu_const_names[k]);
+	}
+	else
+	{
+		len = sprintf(output, "<imm>%d</imm>", k);
+	}
+
+	return output + len;
+}
+
+// [hlide] added print_vfpu_halffloat_xml
+static char *print_vfpu_halffloat_xml(int l, char *output)
+{
+	int len;
+
+	/* Convert a VFPU 16-bit floating-point number to IEEE754. */
+	union float2int
+	{
+		unsigned int i;
+		float f;
+	} float2int;
+	unsigned short float16 = l & 0xFFFF;
+	unsigned int sign = (float16 >> VFPU_SH_FLOAT16_SIGN) & VFPU_MASK_FLOAT16_SIGN;
+	int exponent = (float16 >> VFPU_SH_FLOAT16_EXP) & VFPU_MASK_FLOAT16_EXP;
+	unsigned int fraction = float16 & VFPU_MASK_FLOAT16_FRAC;
+	char signchar = '+' + ((sign == 1) * 2);
+
+	if (exponent == VFPU_FLOAT16_EXP_MAX)
+	{
+		if (fraction == 0)
+			len = sprintf(output, "%cInf", signchar);
+		else
+			len = sprintf(output, "%cNaN", signchar);
+	}
+	else if (exponent == 0 && fraction == 0)
+	{
+		len = sprintf(output, "%c0", signchar);
+	}
+	else
+	{
+		if (exponent == 0)
+		{
+			do
+			{
+				fraction <<= 1;
+				exponent--;
+			}
+			while (!(fraction & (VFPU_MASK_FLOAT16_FRAC + 1)));
+
+			fraction &= VFPU_MASK_FLOAT16_FRAC;
+		}
+
+		/* Convert to 32-bit single-precision IEEE754. */
+		float2int.i = sign << 31;
+		float2int.i |= (exponent + 112) << 23;
+		float2int.i |= fraction << 13;
+		len = sprintf(output, "<float>%g</float>", float2int.f);
+	}
+
+	return output + len;
+}
+
+// [hlide] added print_vfpu_prefix_xml
+static char *print_vfpu_prefix_xml(int l, unsigned int pos, char *output)
+{
+	int len = 0;
+
+	switch (pos)
+	{
+	case '0':
+	case '1':
+	case '2':
+	case '3':
+		{
+			unsigned int base = '0';
+			unsigned int negation = (l >> (pos - (base - VFPU_SH_PFX_NEG))) & VFPU_MASK_PFX_NEG;
+			unsigned int constant = (l >> (pos - (base - VFPU_SH_PFX_CST))) & VFPU_MASK_PFX_CST;
+			unsigned int abs_consthi = (l >> (pos - (base - VFPU_SH_PFX_ABS_CSTHI))) & VFPU_MASK_PFX_ABS_CSTHI;
+			unsigned int swz_constlo = (l >> ((pos - base) * 2)) & VFPU_MASK_PFX_SWZ_CSTLO;
+
+			len = sprintf(output, "<%s>", pfx_swz_names[pos - base]);
+			if (negation)
+				len = sprintf(output, "-");
+			if (constant)
+			{
+				len += sprintf(output, "%s", pfx_cst_names[(abs_consthi << 2) | swz_constlo]);
+			}
+			else
+			{
+				if (abs_consthi)
+					len += sprintf(output, "|%s|", pfx_swz_names[swz_constlo]);
+				else
+					len += sprintf(output, "%s", pfx_swz_names[swz_constlo]);
+			}
+			len += sprintf(output, "</%s>", pfx_swz_names[pos - base]);
+		}
+		break;
+
+	case '4':
+	case '5':
+	case '6':
+	case '7':
+		{
+			unsigned int base = '4';
+			unsigned int mask = (l >> (pos - (base - VFPU_SH_PFX_MASK))) & VFPU_MASK_PFX_MASK;
+			unsigned int saturation = (l >> ((pos - base) * 2)) & VFPU_MASK_PFX_SAT;
+
+			len = sprintf(output, "<%s>", pfx_swz_names[pos - base]);
+			if (!mask)
+				len += sprintf(output, "%s", pfx_sat_names[saturation]);
+			len += sprintf(output, "</%s>", pfx_swz_names[pos - base]);
+		}
+		break;
+	}
+
+	return output + len;
+}
+
+// [hlide] added print_vfpu_rotator_xml
+static char *print_vfpu_rotator_xml(int l, char *output)
+{
+	int len;
+
+	const char *elements[4];
+
+	unsigned int opcode = l & VFPU_MASK_OP_SIZE;
+	unsigned int rotators = (l >> 16) & 0x1f;
+	unsigned int opsize, rothi, rotlo, negation, i;
+
+	/* Determine the operand size so we'll know how many elements to output. */
+	if (opcode == VFPU_OP_SIZE_PAIR)
+		opsize = 2;
+	else if (opcode == VFPU_OP_SIZE_TRIPLE)
+		opsize = 3;
+	else
+		opsize = (opcode == VFPU_OP_SIZE_QUAD) * 4;	/* Sanity check. */
+
+	rothi = (rotators >> VFPU_SH_ROT_HI) & VFPU_MASK_ROT_HI;
+	rotlo = (rotators >> VFPU_SH_ROT_LO) & VFPU_MASK_ROT_LO;
+	negation = (rotators >> VFPU_SH_ROT_NEG) & VFPU_MASK_ROT_NEG;
+
+	if (rothi == rotlo)
+	{
+		if (negation)
+		{
+			elements[0] = "-s";
+			elements[1] = "-s";
+			elements[2] = "-s";
+			elements[3] = "-s";
+		}
+		else
+		{
+			elements[0] = "s";
+			elements[1] = "s";
+			elements[2] = "s";
+			elements[3] = "s";
+		}
+	}
+	else
+	{
+		elements[0] = "0";
+		elements[1] = "0";
+		elements[2] = "0";
+		elements[3] = "0";
+	}
+	if (negation)
+		elements[rothi] = "-s";
+	else
+		elements[rothi] = "s";
+	elements[rotlo] = "c";
+
+	len = sprintf(output, "<rot>");
+
+	for (i = 0;;)
+	{
+		len += sprintf(output, "<%s>%s</%s>", pfx_swz_names[i], elements[i], pfx_swz_names[i]);
+		if (++i >= opsize)
+			break;
+	}
+
+	len += sprintf(output, "</rot>");
+
+	return output + len;
+}
+
+
 static char *print_fpureg_xml(int reg, char *output)
 {
 	int len;
@@ -1968,20 +2177,20 @@ static void decode_args_xml(unsigned int opcode, unsigned int PC, const char *fm
 					case '3' : output = print_int_xml(VI3(opcode), output); i++; break;
 					case '5' : output = print_int_xml(VI5(opcode), output); i++; break;
 					case '8' : output = print_int_xml(VI8(opcode), output); i++; break;
-					case 'k' : output = print_vfpu_const(VI5(opcode), output); i++; break;
+					case 'k' : output = print_vfpu_const_xml(VI5(opcode), output); i++; break;
 					case 'i' : output = print_int_xml(IMM(opcode), output); i++; break;
-					case 'h' : output = print_vfpu_halffloat(opcode, output); i++; break;
-					case 'r' : output = print_vfpu_rotator(opcode, output); i++; break;
-					case 'p' : if (fmt[i+2]) { output = print_vfpu_prefix(opcode, fmt[i+2], output); i += 2; }
+					case 'h' : output = print_vfpu_halffloat_xml(opcode, output); i++; break;
+					case 'r' : output = print_vfpu_rotator_xml(opcode, output); i++; break;
+					case 'p' : if (fmt[i+2]) { output = print_vfpu_prefix_xml(opcode, fmt[i+2], output); i += 2; }
 							   break;
 					}
 					break;
 				case 'X': if(fmt[i+1]) { output = print_vfpureg_xml(VO(opcode), fmt[i+1], output); i++; }
 						  break;
-				case 'Z':
+				case 'Z': // [hlide] modified %Z to %Z? (? is c, n)
 					switch (fmt[i+1]) {
 					case 'c' : output = print_imm_xml(VCC(opcode), output); i++; break;
-					case 'n' : output = print_imm_xml(VCN(opcode), output); i++; break;
+					case 'n' : output = print_vfpu_cond_xml(VCN(opcode), output); i++; break;
 					}
 					break;
 				case 'c': output = print_hex_xml(CODE(opcode), output);
