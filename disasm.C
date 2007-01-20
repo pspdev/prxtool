@@ -25,7 +25,7 @@
  * %1 - Cop1 register
  * %2? - Cop2 register (? is (s, d))
  * %p - General cop (i.e. numbered) register
- * %n - ins/ext size
+ * %n? - ins/ext size, ? (e, i)
  * %r - Debug register
  * %k - Cache function
  * %D - Fd
@@ -159,8 +159,8 @@ static struct Instruction g_inst[] =
 	{ "divu",		0x0000001B, 0xFC00FFFF, "%s, %t", ADDR_TYPE_NONE, 0 },
 	{ "dret",		0x7000003E, 0xFFFFFFFF,	"", ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "eret",		0x42000018, 0xFFFFFFFF, "", ADDR_TYPE_NONE, 0 },
-	{ "ext",		0x7C000000, 0xFC00003F, "%t, %s, %a, %n", ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	{ "ins",		0x7C000004, 0xFC00003F, "%t, %s, %a, %n", ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "ext",		0x7C000000, 0xFC00003F, "%t, %s, %a, %ne", ADDR_TYPE_NONE, INSTR_TYPE_PSP },
+	{ "ins",		0x7C000004, 0xFC00003F, "%t, %s, %a, %ni", ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "j",			0x08000000, 0xFC000000,	"%j", ADDR_TYPE_26, INSTR_TYPE_JUMP },
 	{ "jr",			0x00000008, 0xFC1FFFFF,	"%J", ADDR_TYPE_REG, INSTR_TYPE_JUMP },
 	{ "jalr",		0x00000009, 0xFC1F07FF,	"%J, %d", ADDR_TYPE_REG, INSTR_TYPE_JAL },
@@ -546,7 +546,10 @@ static struct Instruction g_inst[] =
 	{ "vzero.q", 0xD0068080, 0xFFFFFF80, "%zq" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vzero.s", 0xD0060000, 0xFFFFFF80, "%zs" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
 	{ "vzero.t", 0xD0068000, 0xFFFFFF80, "%zt" , ADDR_TYPE_NONE, INSTR_TYPE_PSP },
-	};
+	{ "mfvme", 0x68000000, 0xFC000000, "%t, %i", ADDR_TYPE_NONE, 0 },
+	{ "mtvme", 0xb0000000, 0xFC000000, "%t, %i", ADDR_TYPE_NONE, 0 },
+
+  };
 
 extern const char *regName[32];
 
@@ -1506,8 +1509,12 @@ static void decode_args(unsigned int opcode, unsigned int PC, const char *fmt, c
 						  break;
 				case 'r': output = print_debugreg(RD(opcode), output);
 						  break;
-				case 'n': output = print_int(RD(opcode) + 1, output);
-						  break;
+				case 'n': // [hlide] completed %n? (? is e, i)
+					switch (fmt[i+1]) {
+					case 'e' : output = print_int(RD(opcode) + 1, output); i++; break;
+					case 'i' : output = print_int(RD(opcode) - SA(opcode) + 1, output); i++; break;
+					}
+					break;
 				case 'x': if(fmt[i+1]) { output = print_vfpureg(VT(opcode), fmt[i+1], output); i++; }break;
 				case 'y': if(fmt[i+1]) { 
 							  int reg = VS(opcode);
@@ -2161,8 +2168,12 @@ static void decode_args_xml(unsigned int opcode, unsigned int PC, const char *fm
 						  break;
 				case 'r': output = print_debugreg_xml(RD(opcode), output);
 						  break;
-				case 'n': output = print_int_xml(RD(opcode) + 1, output);
-						  break;
+				case 'n': // [hlide] completed %n? (? is e, i)
+					switch (fmt[i+1]) {
+					case 'e' : output = print_int_xml(RD(opcode) + 1, output); i++; break;
+					case 'i' : output = print_int_xml(RD(opcode) - SA(opcode) + 1, output); i++; break;
+					}
+					break;
 				case 'x': if(fmt[i+1]) { output = print_vfpureg_xml(VT(opcode), fmt[i+1], output); i++; }break;
 				case 'y': if(fmt[i+1]) { 
 							  int reg = VS(opcode);
