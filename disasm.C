@@ -1207,14 +1207,14 @@ static char *print_vfpu_prefix(int l, unsigned int pos, char *output)
 				len = sprintf(output, "-");
 			if (constant)
 			{
-				len += sprintf(output, "%s", pfx_cst_names[(abs_consthi << 2) | swz_constlo]);
+				len += sprintf(output+len, "%s", pfx_cst_names[(abs_consthi << 2) | swz_constlo]);
 			}
 			else
 			{
 				if (abs_consthi)
-					len += sprintf(output, "|%s|", pfx_swz_names[swz_constlo]);
+					len += sprintf(output+len, "|%s|", pfx_swz_names[swz_constlo]);
 				else
-					len += sprintf(output, "%s", pfx_swz_names[swz_constlo]);
+					len += sprintf(output+len, "%s", pfx_swz_names[swz_constlo]);
 			}
 		}
 		break;
