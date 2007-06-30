@@ -475,9 +475,7 @@ bool CProcessElf::BuildBinaryImage()
 	assert(m_iElfSize > 0);
 	assert(m_pElfBin == NULL);
 	assert(m_iBinSize == 0);
-	assert(m_pElfSections != NULL);
-	assert(m_iSHCount != 0);
-
+	
 	/* Find the maximum and minimum addresses */
 	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 	{
@@ -500,7 +498,7 @@ bool CProcessElf::BuildBinaryImage()
 		}
 	}
 
-	COutput::Printf(LEVEL_DEBUG, "Min Address %08X, Max Address %08X, Max Sizs %d\n", 
+	COutput::Printf(LEVEL_DEBUG, "Min Address %08X, Max Address %08X, Max Size %d\n", 
 								  iMinAddr, iMaxAddr, iMaxSize);
 
 	if(iMinAddr != 0xFFFFFFFF)
@@ -594,7 +592,67 @@ bool CProcessElf::LoadSections()
 	}
 	else
 	{
-		COutput::Puts(LEVEL_DEBUG, "No section headers in ELF file");
+		/* If we have no section headers let's build some fake sections */
+		if(m_iSHCount == 0)
+		{
+			if(m_iPHCount < 3)
+			{
+				COutput::Printf(LEVEL_ERROR, "Invalid number of program headers for newstyle PRX (%d)\n", 
+						m_iPHCount);
+				return false;
+			}
+
+			/* Allocate 5 section entries */
+			SAFE_ALLOC(m_pElfSections, ElfSection[5]);
+			if(m_pElfSections == NULL)
+			{
+				return false;
+			}
+			m_iSHCount = 5;
+
+			memset(m_pElfSections, 0, sizeof(ElfSection) * 5);
+
+			m_pElfSections[1].iType = SHT_PROGBITS;
+			m_pElfSections[1].iFlags = SHF_ALLOC | SHF_EXECINSTR;
+			m_pElfSections[1].iAddr = m_pElfPrograms[0].iVaddr;
+			m_pElfSections[1].pData = m_pElf + m_pElfPrograms[0].iOffset;
+			m_pElfSections[1].iSize = m_pElfPrograms[0].iFilesz;
+			strcpy(m_pElfSections[1].szName, ".text");
+
+			m_pElfSections[2].iType = SHT_PROGBITS;
+			m_pElfSections[2].iFlags = SHF_ALLOC;
+			m_pElfSections[2].iAddr = m_pElfPrograms[1].iVaddr;
+			m_pElfSections[2].pData = m_pElf + m_pElfPrograms[1].iOffset;
+			m_pElfSections[2].iSize = m_pElfPrograms[1].iFilesz;
+			strcpy(m_pElfSections[2].szName, ".data");
+
+			m_pElfSections[3].iType = SHT_NOBITS;
+			m_pElfSections[3].iFlags = SHF_ALLOC;
+			m_pElfSections[3].iAddr = m_pElfPrograms[1].iVaddr + m_pElfPrograms[1].iFilesz;
+			m_pElfSections[3].pData = m_pElf + m_pElfPrograms[1].iOffset + m_pElfPrograms[1].iFilesz;
+			m_pElfSections[3].iSize = m_pElfPrograms[1].iMemsz - m_pElfPrograms[1].iFilesz;
+			strcpy(m_pElfSections[3].szName, ".bss");
+
+			m_pElfSections[4].iType = SHT_PRXRELOC;
+			m_pElfSections[4].iFlags = 0;
+			m_pElfSections[4].iAddr = 0;
+			m_pElfSections[4].pData = m_pElf + m_pElfPrograms[2].iOffset;
+			m_pElfSections[4].iSize = m_pElfPrograms[2].iFilesz;
+			/* Bind to section 1, not that is matters */
+			m_pElfSections[4].iInfo = 1;
+			strcpy(m_pElfSections[4].szName, ".reloc");
+
+			if(COutput::GetDebug())
+			{
+				ElfDumpSections();
+			}
+
+			blRet = true;
+		}
+		else
+		{
+			COutput::Puts(LEVEL_DEBUG, "No section headers in ELF file");
+		}
 	}
 
 	return blRet;

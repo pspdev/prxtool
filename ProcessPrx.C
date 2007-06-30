@@ -466,19 +466,18 @@ bool CProcessPrx::LoadExports()
 	return blRet;
 }
 
-bool CProcessPrx::FillModule(ElfSection *pInfoSect)
+bool CProcessPrx::FillModule(u8 *pData, u32 iAddr)
 {
 	bool blRet = false;
-	assert(pInfoSect != NULL);
 
-	if(pInfoSect->pData != NULL)
+	if(pData != NULL)
 	{
 		PspModuleInfo *pModInfo;
 
-		pModInfo = (PspModuleInfo*) pInfoSect->pData;
+		pModInfo = (PspModuleInfo*) pData;
 		memcpy(m_modInfo.name, pModInfo->name, PSP_MODULE_MAX_NAME);
 		m_modInfo.name[PSP_MODULE_MAX_NAME] = 0;
-		m_modInfo.addr = pInfoSect->iAddr;
+		m_modInfo.addr = iAddr;
 		memcpy(&m_modInfo.info, pModInfo, sizeof(PspModuleInfo));
 		m_modInfo.info.flags = LW(m_modInfo.info.flags);
 		m_modInfo.info.gp = LW(m_modInfo.info.gp);
@@ -592,21 +591,43 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 	{
 		/* Do PRX specific stuff */
 		ElfSection *pInfoSect;
+		u8 *pData = NULL;
+		u32 iAddr = 0;
+
 		FreeMemory();
 		m_blPrxLoaded = false;
 
 		m_vMem = CVirtualMem(m_pElfBin, m_iBinSize, m_iBaseAddr, MEM_LITTLE_ENDIAN);
 
 		pInfoSect = ElfFindSection(PSP_MODULE_INFO_NAME);
-		if(pInfoSect != NULL)
+		if(pInfoSect == NULL)
 		{
-			if((FillModule(pInfoSect)) && (LoadExports()) && (LoadImports()) && (LoadRelocs()))
+			/* Get from program headers */
+			if(m_iPHCount > 0)
+			{
+				iAddr = m_pElfPrograms[0].iVaddr + (m_pElfPrograms[0].iPaddr & 0x7FFFFFFF) - m_pElfPrograms[0].iOffset;
+				pData = m_pElfBin + iAddr;
+			}
+		}
+		else
+		{
+			pData = pInfoSect->pData;
+			iAddr = pInfoSect->iAddr;
+		}
+
+		if(pData != NULL)
+		{
+			if((FillModule(pData, iAddr)) && (LoadExports()) && (LoadImports()) && (LoadRelocs()))
 			{
 				COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
 				blRet = true;
 				m_blPrxLoaded = true;
 				BuildMaps();
 			}
+		}
+		else
+		{
+			COutput::Printf(LEVEL_ERROR, "Could not find module section\n");
 		}
 	}
 
