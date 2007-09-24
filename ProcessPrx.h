@@ -71,6 +71,7 @@ public:
 	void SetNidMgr(CNidMgr* nidMgr);
 	void Dump(FILE *fp, const char *disopts);
 	void DumpXML(FILE *fp, const char *disopts);
+	SymbolEntry *GetSymbolEntryFromAddr(u32 dwAddr);
 };
 
 #endif

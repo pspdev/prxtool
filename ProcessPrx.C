@@ -2224,3 +2224,8 @@ void CProcessPrx::SetXmlDump()
 {
 	m_blXmlDump = true;
 }
+
+SymbolEntry *CProcessPrx::GetSymbolEntryFromAddr(u32 dwAddr)
+{
+	return m_syms[dwAddr];
+}

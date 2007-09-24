@@ -51,6 +51,7 @@ static char g_namepath[PATH_MAX];
 static char g_funcpath[PATH_MAX];
 static bool g_loadbin = false;
 static bool g_xmlOutput = false;
+static bool g_aliasOutput = false;
 static const char *g_pDbTitle;
 static unsigned int g_database = 0;
 
@@ -139,7 +140,9 @@ static struct ArgEntry cmd_options[] = {
 	{"symbols", 'y', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_SYMBOLS, 
 		"Output a symbol file based on the input file"},
 	{"funcs", 'z', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_pFuncfile, 0, 
-		"Specify a functions file for disassembly"},
+		"        : Specify a functions file for disassembly"},
+	{"alias", 'A', ARG_TYPE_BOOL, ARG_OPT_NONE, (void*) &g_aliasOutput, true, 
+		"        : Print aliases when using -f mode" },
 };
 
 void DoOutput(OutputLevel level, const char *str)
@@ -502,8 +505,27 @@ void output_importexport(const char *file, CNidMgr *pNids)
 				COutput::Printf(LEVEL_INFO, "Functions:\n");
 				for(iLoop = 0; iLoop < pExport->f_count; iLoop++)
 				{
-					COutput::Printf(LEVEL_INFO, "0x%08X [0x%08X] - %s\n", pExport->funcs[iLoop].nid, 
+
+					COutput::Printf(LEVEL_INFO, "0x%08X [0x%08X] - %s", pExport->funcs[iLoop].nid, 
 							pExport->funcs[iLoop].addr, pExport->funcs[iLoop].name);
+					if(g_aliasOutput)
+					{
+						SymbolEntry *pSym;
+
+						pSym = prx.GetSymbolEntryFromAddr(pExport->funcs[iLoop].addr);
+						if((pSym) && (pSym->alias.size() > 0))
+						{
+							if(strcmp(pSym->name.c_str(), pExport->funcs[iLoop].name))
+							{
+								COutput::Printf(LEVEL_INFO, " => %s", pSym->name.c_str());
+							}
+							else
+							{
+								COutput::Printf(LEVEL_INFO, " => %s", pSym->alias[0].c_str());
+							}
+						}
+					}
+					COutput::Printf(LEVEL_INFO, "\n");
 				}
 			}
 
