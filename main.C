@@ -17,7 +17,7 @@
 #include "output.h"
 #include "getargs.h"
 
-#define PRXTOOL_VERSION "1.0"
+#define PRXTOOL_VERSION "1.1"
 
 enum OutputMode
 {
@@ -613,7 +613,7 @@ void output_deps(const char *file, CNidMgr *pNids)
 	}
 }
 
-void write_stub(const char *szDirectory, PspLibExport *pExp)
+void write_stub(const char *szDirectory, PspLibExport *pExp, CProcessPrx *pPrx)
 {
 	char szPath[MAXPATH];
 	FILE *fp;
@@ -636,7 +636,34 @@ void write_stub(const char *szDirectory, PspLibExport *pExp)
 
 		for(int i = 0; i < pExp->f_count; i++)
 		{
-			fprintf(fp, "\tSTUB_FUNC\t0x%08X,%s\n", pExp->funcs[i].nid, pExp->funcs[i].name);
+			SymbolEntry *pSym;
+
+			if(pPrx)
+			{
+				pSym = pPrx->GetSymbolEntryFromAddr(pExp->funcs[i].addr);
+			}
+			else
+			{
+				pSym = NULL;
+			}
+
+			if((g_aliasOutput) && (pSym) && (pSym->alias.size() > 0))
+			{
+				if(strcmp(pSym->name.c_str(), pExp->funcs[i].name))
+				{
+					fprintf(fp, "\tSTUB_FUNC_WITH_ALIAS\t0x%08X,%s,%s\n", pExp->funcs[i].nid, pExp->funcs[i].name,
+							pSym->name.c_str());
+				}
+				else
+				{
+					fprintf(fp, "\tSTUB_FUNC_WITH_ALIAS\t0x%08X,%s,%s\n", pExp->funcs[i].nid, pExp->funcs[i].name,
+							pSym->alias[0].c_str());
+				}
+			}
+			else
+			{
+				fprintf(fp, "\tSTUB_FUNC\t0x%08X,%s\n", pExp->funcs[i].nid, pExp->funcs[i].name);
+			}
 		}
 
 		fprintf(fp, "\tSTUB_END\n");
@@ -644,7 +671,7 @@ void write_stub(const char *szDirectory, PspLibExport *pExp)
 	}
 }
 
-void write_stub_new(const char *szDirectory, PspLibExport *pExp)
+void write_stub_new(const char *szDirectory, PspLibExport *pExp, CProcessPrx *pPrx)
 {
 	char szPath[MAXPATH];
 	FILE *fp;
@@ -678,8 +705,36 @@ void write_stub_new(const char *szDirectory, PspLibExport *pExp)
 
 		for(int i = 0; i < pExp->f_count; i++)
 		{
+			SymbolEntry *pSym;
+
 			fprintf(fp, "#ifdef F_%s_%04d\n", pExp->name, i + 1);
-			fprintf(fp, "\tIMPORT_FUNC\t\"%s\",0x%08X,%s\n", pExp->name, pExp->funcs[i].nid, pExp->funcs[i].name);
+			if(pPrx)
+			{
+				pSym = pPrx->GetSymbolEntryFromAddr(pExp->funcs[i].addr);
+			}
+			else
+			{
+				pSym = NULL;
+			}
+
+			if((g_aliasOutput) && (pSym) && (pSym->alias.size() > 0))
+			{
+				if(strcmp(pSym->name.c_str(), pExp->funcs[i].name))
+				{
+					fprintf(fp, "\tIMPORT_FUNC_WITH_ALIAS\t\"%s\",0x%08X,%s,%s\n", pExp->name, 
+							pExp->funcs[i].nid, pExp->funcs[i].name, pSym->name.c_str());
+				}
+				else
+				{
+					fprintf(fp, "\tIMPORT_FUNC_WITH_ALIAS\t\"%s\",0x%08X,%s,%s\n", pExp->name, 
+							pExp->funcs[i].nid, pExp->funcs[i].name, pSym->alias[0].c_str());
+				}
+			}
+			else
+			{
+				fprintf(fp, "\tIMPORT_FUNC\t\"%s\",0x%08X,%s\n", pExp->name, pExp->funcs[i].nid, pExp->funcs[i].name);
+			}
+
 			fprintf(fp, "#endif\n");
 		}
 			
@@ -711,11 +766,11 @@ void output_stubs_prx(const char *file, CNidMgr *pNids)
 			{
 				if(g_newstubs)
 				{
-					write_stub_new("", pHead);
+					write_stub_new("", pHead, &prx);
 				}
 				else
 				{
-					write_stub("", pHead);
+					write_stub("", pHead, &prx);
 				}
 			}
 			pHead = pHead->next;
@@ -750,11 +805,11 @@ void output_stubs_xml(CNidMgr *pNids)
 
 		if(g_newstubs)
 		{
-			write_stub_new("", pExp);
+			write_stub_new("", pExp, NULL);
 		}
 		else
 		{
-			write_stub("", pExp);
+			write_stub("", pExp, NULL);
 		}
 
 		pLib = pLib->pNext;
