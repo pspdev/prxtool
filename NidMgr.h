@@ -75,6 +75,8 @@ class CNidMgr
 	FunctionVect  m_funcMap;
 	/** A buffer to store a pre-generated symbol name so it can be passed to the caller */
 	char m_szCurrName[LIB_SYMBOL_NAME_MAX];
+	/** Indicator that we have loaded a master NID file */
+	LibraryEntry *m_pMasterNids;
 	/** Generate a name */
 	const char *GenName(const char *lib, u32 nid);
 	/** Search the loaded libs for a symbol */

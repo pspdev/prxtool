@@ -28,9 +28,11 @@ static SyslibEntry g_syslib[] = {
 	{ 0xcf0cc697, "module_stop_thread_parameter" },
 };
 
+#define MASTER_NID_MAPPER "MasterNidMapper"
+
 /* Default constructor */
 CNidMgr::CNidMgr()
-	: m_pLibHead(NULL)
+	: m_pLibHead(NULL), m_pMasterNids(NULL)
 {
 }
 
@@ -96,12 +98,19 @@ const char *CNidMgr::SearchLibs(const char *lib, u32 nid)
 	const char *pName = NULL;
 	LibraryEntry *pLib;
 
-	pLib = m_pLibHead;
+	if(m_pMasterNids)
+	{
+		pLib = m_pMasterNids;
+	}
+	else
+	{
+		pLib = m_pLibHead;
+	}
 
 	/* Very lazy, could be sped up using a hash table */
 	while(pLib != NULL)
 	{
-		if(strcmp(lib, pLib->lib_name) == 0)
+		if((strcmp(lib, pLib->lib_name) == 0) || (m_pMasterNids))
 		{
 			int iNidLoop;
 
@@ -121,7 +130,14 @@ const char *CNidMgr::SearchLibs(const char *lib, u32 nid)
 			}
 		}
 
-		pLib = pLib->pNext;
+		if(m_pMasterNids) 
+		{
+			pLib = NULL;
+		}
+		else
+		{
+			pLib = pLib->pNext;
+		}
 	}
 
 	if(pName == NULL)
@@ -204,6 +220,7 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name, const
 	TiXmlElement *elmVariable;
 	int fCount;
 	int vCount;
+	bool blMasterNids = false;
 	
 	assert(prx_name != NULL);
 	assert(prx != NULL);
@@ -220,6 +237,12 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name, const
 		{
 			memset(pLib, 0, sizeof(LibraryEntry));
 			strcpy(pLib->lib_name, elmName->Value());
+			if(strcmp(pLib->lib_name, MASTER_NID_MAPPER) == 0)
+			{
+				blMasterNids = true;
+				COutput::Printf(LEVEL_DEBUG, "Found master NID table\n");
+			}
+
 			if(elmFlags)
 			{
 				pLib->flags = strtoul(elmFlags->Value(), NULL, 16);
@@ -282,6 +305,11 @@ void CNidMgr::ProcessLibrary(TiXmlElement *pLibrary, const char *prx_name, const
 			{
 				pLib->pNext = m_pLibHead;
 				m_pLibHead = pLib;
+			}
+
+			if(blMasterNids)
+			{
+				m_pMasterNids = pLib;
 			}
 		}
 
