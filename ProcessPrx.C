@@ -526,16 +526,16 @@ bool CProcessPrx::CreateFakeSections()
 			return false;
 		}
 
-		/* Allocate 5 section entries */
-		SAFE_ALLOC(m_pElfSections, ElfSection[5]);
-		if(m_pElfSections == NULL)
-		{
-			return false;
-		}
 		if (m_pElfPrograms[2].iType == PT_PRXRELOC) {
 			m_iSHCount = 6;
 		} else {
 			m_iSHCount = 5;
+		}
+
+		SAFE_ALLOC(m_pElfSections, ElfSection[m_iSHCount]);
+		if(m_pElfSections == NULL)
+		{
+			return false;
 		}
 
 		memset(m_pElfSections, 0, sizeof(ElfSection) * m_iSHCount);
