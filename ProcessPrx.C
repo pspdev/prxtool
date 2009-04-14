@@ -13,7 +13,7 @@
 #include "output.h"
 #include "disasm.h"
 
-static const char* g_szRelTypes[13] = 
+static const char* g_szRelTypes[16] = 
 {
 	"R_NONE",
 	"R_16",
@@ -27,7 +27,11 @@ static const char* g_szRelTypes[13] =
 	"R_GOT16",
 	"R_PC16",
 	"R_CALL16",
-	"R_GPREL32"
+	"R_GPREL32",
+	"X_HI16",
+	"X_J26",
+	"X_JAL26"
+	
 };
 
 /* Flag indicates the reloc offset field is relative to the text section base */
@@ -187,6 +191,10 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 				nidAddr += 4;
 				funcAddr += 8;
 			}
+			
+			if (funcAddr > m_stubBottom) {
+				m_stubBottom = funcAddr;
+			}
 
 			for(iLoop = 0; iLoop < pLib->v_count; iLoop++)
 			{
@@ -264,6 +272,7 @@ bool CProcessPrx::LoadImports()
 
 	imp_base = m_modInfo.info.imports;
 	imp_end =  m_modInfo.info.imp_end;
+	m_stubBottom = 0;
 
 	if(imp_base != 0)
 	{
@@ -294,6 +303,9 @@ bool CProcessPrx::LoadImports()
 			}
 		}
 	}
+
+	m_stubBottom += 4;
+	COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
 
 	return blRet;
 }
@@ -502,11 +514,87 @@ bool CProcessPrx::FillModule(u8 *pData, u32 iAddr)
 	return blRet;
 }
 
-bool CProcessPrx::LoadRelocs()
+bool CProcessPrx::CreateFakeSections()
 {
-	bool blRet = false;
-	int  iRelocCount = 0;
+	/* If we have no section headers let's build some fake sections */
+	if(m_iSHCount == 0)
+	{
+		if(m_iPHCount < 3)
+		{
+			COutput::Printf(LEVEL_ERROR, "Invalid number of program headers for newstyle PRX (%d)\n", 
+					m_iPHCount);
+			return false;
+		}
+
+		/* Allocate 5 section entries */
+		SAFE_ALLOC(m_pElfSections, ElfSection[5]);
+		if(m_pElfSections == NULL)
+		{
+			return false;
+		}
+		if (m_pElfPrograms[2].iType == PT_PRXRELOC) {
+			m_iSHCount = 6;
+		} else {
+			m_iSHCount = 5;
+		}
+
+		memset(m_pElfSections, 0, sizeof(ElfSection) * m_iSHCount);
+
+		m_pElfSections[1].iType = SHT_PROGBITS;
+		m_pElfSections[1].iFlags = SHF_ALLOC | SHF_EXECINSTR;
+		m_pElfSections[1].iAddr = m_pElfPrograms[0].iVaddr;
+		m_pElfSections[1].pData = m_pElf + m_pElfPrograms[0].iOffset;
+		m_pElfSections[1].iSize = m_stubBottom;
+		strcpy(m_pElfSections[1].szName, ".text");
+
+		m_pElfSections[2].iType = SHT_PROGBITS;
+		m_pElfSections[2].iFlags = SHF_ALLOC;
+		m_pElfSections[2].iAddr = m_stubBottom;
+		m_pElfSections[2].pData = m_pElf + m_pElfPrograms[0].iOffset + m_stubBottom;
+		m_pElfSections[2].iSize = m_pElfPrograms[0].iMemsz - m_stubBottom;
+		strcpy(m_pElfSections[2].szName, ".rodata");
+
+		m_pElfSections[3].iType = SHT_PROGBITS;
+		m_pElfSections[3].iFlags = SHF_ALLOC | SHF_WRITE;
+		m_pElfSections[3].iAddr = m_pElfPrograms[1].iVaddr;
+		m_pElfSections[3].pData = m_pElf + m_pElfPrograms[1].iOffset;
+		m_pElfSections[3].iSize = m_pElfPrograms[1].iFilesz;
+		strcpy(m_pElfSections[3].szName, ".data");
+
+
+		m_pElfSections[4].iType = SHT_NOBITS;
+		m_pElfSections[4].iFlags = SHF_ALLOC | SHF_WRITE;
+		m_pElfSections[4].iAddr = m_pElfPrograms[1].iVaddr + m_pElfPrograms[1].iFilesz;
+		m_pElfSections[4].pData = m_pElf + m_pElfPrograms[1].iOffset + m_pElfPrograms[1].iFilesz;
+		m_pElfSections[4].iSize = m_pElfPrograms[1].iMemsz - m_pElfPrograms[1].iFilesz;
+		strcpy(m_pElfSections[4].szName, ".bss");
+
+		if (m_pElfPrograms[2].iType == PT_PRXRELOC) {
+			m_pElfSections[5].iType = SHT_PRXRELOC;
+			m_pElfSections[5].iFlags = 0;
+			m_pElfSections[5].iAddr = 0;
+			m_pElfSections[5].pData = m_pElf + m_pElfPrograms[2].iOffset;
+			m_pElfSections[5].iSize = m_pElfPrograms[2].iFilesz;
+			/* Bind to section 1, not that is matters */
+			m_pElfSections[5].iInfo = 1;
+			strcpy(m_pElfSections[5].szName, ".reloc");
+		}
+
+		if(COutput::GetDebug())
+		{
+			ElfDumpSections();
+		}
+	}
+	
+	return true;
+}
+
+
+
+int CProcessPrx::CountRelocs()
+{
 	int  iLoop;
+	int  iRelocCount = 0;
 
 	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 	{
@@ -521,47 +609,305 @@ bool CProcessPrx::LoadRelocs()
 		}
 	}
 
+	for(iLoop = 0; iLoop < m_iPHCount; iLoop++)
+	{
+		if(m_pElfPrograms[iLoop].iType == PT_PRXRELOC2) {
+			u8 *block1, block1s, part1s;
+			u8 *block2, block2s, part2s;
+			u8 *pos, *end;
+			
+			if (m_pElfPrograms[iLoop].pData[0] != 0 ||
+			    m_pElfPrograms[iLoop].pData[1] != 0) {
+				COutput::Printf(LEVEL_DEBUG, "Should start with 0x00 0x00\n");
+				return 0;
+			}
+			
+			part1s = m_pElfPrograms[iLoop].pData[2];
+			part2s = m_pElfPrograms[iLoop].pData[3];
+			block1s = m_pElfPrograms[iLoop].pData[4];
+			block1 = &m_pElfPrograms[iLoop].pData[4];
+			block2 = block1 + block1s;
+			block2s = block2[0];
+			pos = block2 + block2s;
+			end = &m_pElfPrograms[iLoop].pData[m_pElfPrograms[iLoop].iFilesz];
+			while (pos < end) {
+				u32 cmd, part1, temp;
+				cmd = pos[0] | (pos[1] << 16);
+				pos += 2;
+				temp = (cmd << (16 - part1s)) & 0xFFFF;
+				temp = (temp >> (16 - part1s)) & 0xFFFF;
+				if (temp >= block1s) {
+					COutput::Printf(LEVEL_DEBUG, "Invalid cmd1 index\n");
+					return 0;
+				}
+				part1 = block1[temp];
+				pos += (part1 & 0x06);
+				if ((part1 & 0x01) != 0) {
+					if (part1 & 0x38 == 0x10) {
+						pos += 2;
+					} else if (part1 & 0x38 == 0x18) {
+						pos += 4;
+					}
+				}
+				iRelocCount++;
+			}
+		}
+	}
+
+
 	COutput::Printf(LEVEL_DEBUG, "Relocation entries %d\n", iRelocCount);
+	return iRelocCount;
+}
+
+int CProcessPrx::LoadRelocsTypeA(struct ElfReloc *pRelocs)
+{
+	int i, count;
+	const Elf32_Rel *reloc;
+	int  iLoop, iCurrRel = 0;
+	
+	for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+	{
+		if((m_pElfSections[iLoop].iType == SHT_PRXRELOC) || (m_pElfSections[iLoop].iType == SHT_REL))
+		{
+			count = m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel);
+			reloc = (const Elf32_Rel *) m_pElfSections[iLoop].pData;
+			for(i = 0; i < count; i++) {    
+				pRelocs[iCurrRel].secname = m_pElfSections[iLoop].szName;
+				pRelocs[iCurrRel].base = 0;
+				pRelocs[iCurrRel].type = ELF32_R_TYPE(LW(reloc->r_info));
+				pRelocs[iCurrRel].symbol = ELF32_R_SYM(LW(reloc->r_info));
+				pRelocs[iCurrRel].info = LW(reloc->r_info);
+				pRelocs[iCurrRel].offset = reloc->r_offset;
+				reloc++;
+				iCurrRel++;
+			}
+		}
+	}
+
+	return iCurrRel;
+}
+
+int CProcessPrx::LoadRelocsTypeB(struct ElfReloc *pRelocs)
+{
+	u8 *block1, *block2, *pos, *end;
+	u32 block1s, block2s, part1s, part2s;
+	u32 cmd, part1, part2, lastpart2;
+	u32 addend = 0, offset = 0;
+	u32 ofsbase = 0xFFFFFFFF, addrbase;
+	u32 temp1, temp2;
+	u32 nbits;
+	int iLoop, iCurrRel = 0;
+	
+	for(iLoop = 0; iLoop < m_iPHCount; iLoop++)
+	{
+		if(m_pElfPrograms[iLoop].iType == PT_PRXRELOC2)
+		{
+			part1s = m_pElfPrograms[iLoop].pData[2];
+			part2s = m_pElfPrograms[iLoop].pData[3];
+			block1s =m_pElfPrograms[iLoop].pData[4];
+			block1 = &m_pElfPrograms[iLoop].pData[4];
+			block2 = block1 + block1s;
+			block2s = block2[0];
+			pos = block2 + block2s;
+			end = &m_pElfPrograms[iLoop].pData[m_pElfPrograms[iLoop].iFilesz];
+			
+			for (nbits = 1; (1 << nbits) < iLoop; nbits++) {
+				if (nbits >= 33) {
+					COutput::Printf(LEVEL_DEBUG, "Invalid nbits\n");
+					return 0;
+				}
+			}
+
+	
+			lastpart2 = block2s;
+			while (pos < end) {
+				cmd = pos[0] | (pos[1] << 8);
+				pos += 2;
+				temp1 = (cmd << (16 - part1s)) & 0xFFFF;
+				temp1 = (temp1 >> (16 - part1s)) & 0xFFFF;
+				if (temp1 >= block1s) {
+					COutput::Printf(LEVEL_DEBUG, "Invalid part1 index\n");
+					return 0;
+				}
+				part1 = block1[temp1];
+				if ((part1 & 0x01) == 0) {
+					ofsbase = (cmd << (16 - part1s - nbits)) & 0xFFFF;
+					ofsbase = (ofsbase >> (16 - nbits)) & 0xFFFF;
+					if (!(ofsbase < iLoop)) {
+						COutput::Printf(LEVEL_DEBUG, "Invalid offset base\n");
+						return 0;
+					}
+
+					if ((part1 & 0x06) == 0) {
+						offset = cmd >> (part1s + nbits);
+					} else if ((part1 & 0x06) == 4) {
+						offset = pos[0] | (pos[1] << 8) | (pos[2] << 16) | (pos[3] << 24);
+						pos += 4;
+					} else {
+						COutput::Printf(LEVEL_DEBUG, "Invalid size\n");
+						return 0;
+					}
+				} else {
+					temp2 = (cmd << (16 - (part1s + nbits + part2s))) & 0xFFFF;
+					temp2 = (temp2 >> (16 - part2s)) & 0xFFFF;
+					if (temp2 >= block2s) {
+						COutput::Printf(LEVEL_DEBUG, "Invalid part2 index\n");
+						return 0;
+					}
+
+					addrbase = (cmd << (16 - part1s - nbits)) & 0xFFFF;
+					addrbase = (addrbase >> (16 - nbits)) & 0xFFFF;
+					if (!(addrbase < iLoop)) {
+						COutput::Printf(LEVEL_DEBUG, "Invalid address base\n");
+						return 0;
+					}
+					part2 = block2[temp2];
+					
+					switch (part1 & 0x06) {
+					case 0:
+						temp1 = cmd;
+						if (temp1 & 0x8000) {
+							temp1 |= ~0xFFFF;
+							temp1 >>= part1s + part2s + nbits;
+							temp1 |= ~0xFFFF;
+						} else {
+							temp1 >>= part1s + part2s + nbits;
+						}
+						offset += temp1;
+						break;
+					case 2:
+						temp1 = cmd;
+						if (temp1 & 0x8000) temp1 |= ~0xFFFF;
+						temp1 = (temp1 >> (part1s + part2s + nbits)) << 16;
+						temp1 |= pos[0] | (pos[1] << 8);
+						offset += temp1;
+						pos += 2;
+						break;
+					case 4:
+						offset = pos[0] | (pos[1] << 8) | (pos[2] << 16) | (pos[3] << 24);
+						pos += 4;
+						break;
+					default:
+						COutput::Printf(LEVEL_DEBUG, "invalid part1 size\n");
+						return 0;
+					}
+					
+					if (!(offset < m_pElfPrograms[ofsbase].iFilesz)) {
+						COutput::Printf(LEVEL_DEBUG, "invalid relocation offset\n");
+						return 0;
+					}
+					
+					switch (part1 & 0x38) {
+					case 0x00:
+						addend = 0;
+						break;
+					case 0x08:
+						if ((lastpart2 ^ 0x04) != 0) {
+							addend = 0;
+						}
+						break;
+					case 0x10:
+						addend = pos[0] | (pos[1] << 8);
+						pos += 2;
+						break;
+					case 0x18:
+						addend = pos[0] | (pos[1] << 8) | (pos[2] << 16) | (pos[3] << 24);
+						pos += 4;
+						COutput::Printf(LEVEL_DEBUG, "invalid addendum size\n");
+						return 0;
+					default:
+						COutput::Printf(LEVEL_DEBUG, "invalid addendum size\n");
+						return 0;
+					}
+
+					lastpart2 = part2;
+					pRelocs[iCurrRel].secname = NULL;
+					pRelocs[iCurrRel].base = 0;
+					pRelocs[iCurrRel].symbol = ofsbase | (addrbase << 8);
+					pRelocs[iCurrRel].info = (ofsbase << 8) | (addrbase << 8);
+					pRelocs[iCurrRel].offset = offset;
+
+					switch (part2) {
+					case 2:
+						pRelocs[iCurrRel].type = R_MIPS_32;
+						break;
+					case 0:
+						continue;
+					case 3:
+						pRelocs[iCurrRel].type = R_MIPS_26;
+						break;
+					case 6:
+						pRelocs[iCurrRel].type = R_MIPS_X_J26;
+						break;
+					case 7:
+						pRelocs[iCurrRel].type = R_MIPS_X_JAL26;
+						break;
+					case 4:
+						pRelocs[iCurrRel].type = R_MIPS_X_HI16;
+						pRelocs[iCurrRel].base = (s16) addend;
+						break;
+					case 1:
+					case 5:
+						pRelocs[iCurrRel].type = R_MIPS_LO16;
+						break;
+					default:
+						COutput::Printf(LEVEL_DEBUG, "invalid relocation type\n");
+						return 0;
+					}
+					temp1 = (cmd << (16 - part1s)) & 0xFFFF;
+					temp1 = (temp1 >> (16 - part1s)) & 0xFFFF;
+					temp2 = (cmd << (16 - (part1s + nbits + part2s))) & 0xFFFF;
+					temp2 = (temp2 >> (16 - part2s)) & 0xFFFF;					
+					COutput::Printf(LEVEL_DEBUG, "CMD=0x%04X I1=0x%02X I2=0x%02X PART1=0x%02X PART2=0x%02X\n", cmd, temp1, temp2, part1, part2);
+					pRelocs[iCurrRel].info |= pRelocs[iCurrRel].type;
+					iCurrRel++;
+				}
+			}
+		}
+	}
+	return iCurrRel;
+}
+
+
+bool CProcessPrx::LoadRelocs()
+{
+	bool blRet = false;
+	int  iRelocCount = 0;
+	int  iCurrRel = 0;
+	int  count;
+	int  iLoop;
+
+	iRelocCount = this->CountRelocs();
 
 	if(iRelocCount > 0)
 	{
 		SAFE_ALLOC(m_pElfRelocs, ElfReloc[iRelocCount]);
 		if(m_pElfRelocs != NULL)
 		{
-			const Elf32_Rel *reloc;
-			int iCurrRel = 0;
-			u32 iRelLoop;
 
 			memset(m_pElfRelocs, 0, sizeof(ElfReloc) * iRelocCount);
-			for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
-			{
-				if((m_pElfSections[iLoop].iType == SHT_PRXRELOC) || (m_pElfSections[iLoop].iType == SHT_REL))
-				{
-					reloc = (Elf32_Rel*) m_pElfSections[iLoop].pData;
-					m_pElfSections[m_pElfSections[iLoop].iInfo].pRelocs = &m_pElfRelocs[iCurrRel];
-					m_pElfSections[m_pElfSections[iLoop].iInfo].iRelocCount = 
-											m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel);
-					for(iRelLoop = 0; iRelLoop < (m_pElfSections[iLoop].iSize / sizeof(Elf32_Rel)); iRelLoop++)
-					{
-						m_pElfRelocs[iCurrRel].secname = m_pElfSections[iLoop].szName;
-						m_pElfRelocs[iCurrRel].base = 0;
-						m_pElfRelocs[iCurrRel].type = ELF32_R_TYPE(LW(reloc->r_info));
-						m_pElfRelocs[iCurrRel].symbol = ELF32_R_SYM(LW(reloc->r_info));
-						m_pElfRelocs[iCurrRel].info = LW(reloc->r_info);
-						m_pElfRelocs[iCurrRel].offset = reloc->r_offset;
-						iCurrRel++;
-						reloc++;
-					}
-				}
+			
+			COutput::Printf(LEVEL_DEBUG, "Loading Type A relocs\n");
+			count = this->LoadRelocsTypeA (&m_pElfRelocs[iCurrRel]);
+			if (count) {
+				iCurrRel += count;
+			} else {
 			}
 
+			COutput::Printf(LEVEL_DEBUG, "Loading Type B relocs\n");
+			count = this->LoadRelocsTypeB (&m_pElfRelocs[iCurrRel]);
+			if (count) {
+				iCurrRel += count;
+			} else {
+			}
 			m_iRelocCount = iCurrRel;
 			
 			if(COutput::GetDebug())
 			{
+				COutput::Printf(LEVEL_DEBUG, "Dumping relocs %d\n", m_iRelocCount);
 				for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
 				{
-					if(m_pElfRelocs[iLoop].type < 13)
+					if(m_pElfRelocs[iLoop].type < 16)
 					{
 						COutput::Printf(LEVEL_DEBUG, "Reloc %s:%d Type:%s Symbol:%d Offset %08X Info:%08X\n", 
 								m_pElfRelocs[iLoop].secname, iLoop, g_szRelTypes[m_pElfRelocs[iLoop].type],
@@ -617,7 +963,7 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 
 		if(pData != NULL)
 		{
-			if((FillModule(pData, iAddr)) && (LoadExports()) && (LoadImports()) && (LoadRelocs()))
+			if((FillModule(pData, iAddr)) && (LoadExports()) && (LoadImports()) && (CreateFakeSections()) && (LoadRelocs()))
 			{
 				COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
 				blRet = true;
@@ -1074,41 +1420,12 @@ void CProcessPrx::FreeImms(ImmMap &imms)
 	}
 }
 
-static int reloc_sort(const void *rel1, const void *rel2)
-{
-	const ElfReloc *pRel1, *pRel2;
-
-	pRel1 = static_cast<const ElfReloc *>(rel1);
-	pRel2 = static_cast<const ElfReloc *>(rel2);
-
-	/* First sort by program header */
-	if(pRel1->symbol != pRel2->symbol)
-	{
-		return pRel1->symbol - pRel2->symbol;
-	}
-
-	/* If same program header then sort by relative offset */
-
-	return pRel1->offset - pRel2->offset; 
-}
-
 void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 {
-	struct RegEntry
-	{
-		/* Address of the relocation */
-		unsigned int addr;
-		/* Pointer to the instruction data */
-		u32 *inst;
-		/* Fixed up by an ori instruction */
-		int ori;
-	};
-
 	int iLoop;
 	u32 *pData;
-	RegEntry regs[32];
+	u32 regs[32];
 
-	memset(regs, 0, sizeof(regs));
 	/* Fixup the elf file and output it to fp */
 	if((m_blPrxLoaded == false))
 	{
@@ -1125,9 +1442,6 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 	{
 		return;
 	}
-
-	/* Sort the relocations, might work, might not */
-	qsort(m_pElfRelocs, m_iRelocCount, sizeof(ElfReloc), reloc_sort);
 
 	pData = NULL;
 	for(iLoop = 0; iLoop < m_iRelocCount; iLoop++)
@@ -1157,128 +1471,131 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 		switch(m_pElfRelocs[iLoop].type)
 		{
 			case R_MIPS_HI16: {
-								  int reg;
-								  u32 inst;
-								  inst = LW(*pData);
-								  /* If not a lui instruction I don't know what it is */
-								  if((inst >> 26) == 0xF)
-								  {
-									  reg = (inst >> 16) & 0x1F;
-									  if(regs[reg].inst)
-									  {
-										  u32 oldinst;
-										  /* Flush old instruction data to disk */
-										  oldinst = LW(*regs[reg].inst);
-										  oldinst &= ~0xFFFF;
-										  if((regs[reg].addr & 0x8000) && (!regs[reg].ori))
-										  {
-											  regs[reg].addr += 0x10000;
-										  }
-										  oldinst |= (regs[reg].addr >> 16);
-										  SW(*regs[reg].inst, oldinst);
-									  }
-									  regs[reg].addr = 0;
-									  regs[reg].inst = pData;
-									  regs[reg].ori = 0;
-								  }
-								  else
-								  {
-									  COutput::Printf(LEVEL_DEBUG, "Invalid hi relocation instruction %08X\n", inst);
-								  }
-							  }
-							  break;
+				u32 inst;
+				int base = iLoop;
+				int lowaddr, hiaddr, addr;
+			  	int loinst;
+			  	ImmEntry *imm;
+			  	int ofsph = m_pElfPrograms[iOfsPH].iVaddr;
+			  	
+				inst = LW(*pData);
+				addr = ((inst & 0xFFFF) << 16) + dwCurrBase;
+				COutput::Printf(LEVEL_DEBUG, "Hi at (%08X) %d\n", dwRealOfs, iLoop);
+			  	while (++iLoop < m_iRelocCount) {
+			  		if (m_pElfRelocs[iLoop].type != R_MIPS_HI16) break;
+			  	}
+				COutput::Printf(LEVEL_DEBUG, "Matching low at %d\n", iLoop);
+			  	if (iLoop < m_iRelocCount) {
+					loinst = LW(*((u32*) m_vMem.GetPtr(m_pElfRelocs[iLoop].offset+ofsph)));
+				} else {
+					loinst = 0;
+				}
+
+				addr = (s32) addr + (s16) (loinst & 0xFFFF);
+				lowaddr = addr & 0xFFFF;
+				hiaddr = (((addr >> 15) + 1) >> 1) & 0xFFFF;
+				while (base < iLoop) {
+					inst = LW(*((u32*)m_vMem.GetPtr(m_pElfRelocs[base].offset+ofsph)));
+					inst = (inst & ~0xFFFF) | hiaddr;
+					SW(*((u32*)m_vMem.GetPtr(m_pElfRelocs[base].offset+ofsph)), inst);
+					base++;
+				}
+			  	while (iLoop < m_iRelocCount) {
+					inst = LW(*((u32*)m_vMem.GetPtr(m_pElfRelocs[iLoop].offset+ofsph)));
+					if ((inst & 0xFFFF) != (loinst & 0xFFFF)) break;
+					inst = (inst & ~0xFFFF) | lowaddr;
+					SW(*((u32*)m_vMem.GetPtr(m_pElfRelocs[iLoop].offset+ofsph)), inst);
+									
+					imm = new ImmEntry;
+					imm->addr = dwBase + ofsph + m_pElfRelocs[iLoop].offset;
+					imm->target = addr;
+					imm->text = ElfAddrIsText(addr - dwBase);
+					imms[dwBase + ofsph + m_pElfRelocs[iLoop].offset] = imm;
+
+			  		if (m_pElfRelocs[++iLoop].type != R_MIPS_LO16) break;
+				}
+				iLoop--;
+				COutput::Printf(LEVEL_DEBUG, "Finished at %d\n", iLoop);
+			}
+			break;
+			case R_MIPS_16:
 			case R_MIPS_LO16: {
-								  u32 hiinst;
-								  u32 loinst;
-								  u32 addr;
-								  int reg;
-								  ImmEntry *imm;
+				u32 loinst;
+				u32 addr;
+				ImmEntry *imm;
 
-								  loinst = LW(*pData);
-								  reg = (loinst >> 21) & 0x1F;
-								  if(regs[reg].inst == NULL)
-								  {
-									  COutput::Printf(LEVEL_DEBUG, "Invalid lo relocation, no matching hi 0x%08X\n", dwRealOfs);
-									  break;
-								  }
+				loinst = LW(*pData);
+				addr = ((s16) (loinst & 0xFFFF)) + dwCurrBase;
+				COutput::Printf(LEVEL_DEBUG, "Low at (%08X)\n", dwRealOfs);
 
-								  hiinst = LW(*regs[reg].inst);
-								  addr = ((hiinst & 0xFFFF) << 16) + dwCurrBase;
+				imm = new ImmEntry;
+				imm->addr = dwRealOfs + dwBase;
+				imm->target = addr;
+				imm->text = ElfAddrIsText(addr - dwBase);
+				imms[dwRealOfs + dwBase] = imm;
 
-								  /* ori */
-								  if((loinst >> 26) == 0xD)
-								  {
-									  addr = addr | (loinst & 0xFFFF);
-									  regs[reg].ori = 1;
-								  }
-								  else
-								  {
-									  addr = (s32) addr + (s16) (loinst & 0xFFFF);
-								  }
+				loinst &= ~0xFFFF;
+				loinst |= (addr & 0xFFFF);
+				SW(*pData, loinst);
+			}
+			break;
+			case R_MIPS_X_HI16: {
+				u32 hiinst;
+				u32 addr, hiaddr;
+				ImmEntry *imm;
 
-								  imm = new ImmEntry;
-								  imm->addr = dwRealOfs + dwBase;
-								  imm->target = addr;
-								  imm->text = ElfAddrIsText(addr - dwBase);
-								  imms[dwRealOfs + dwBase] = imm;
+				hiinst = LW(*pData);
+				addr = (hiinst & 0xFFFF) << 16;
+				addr += rel->base + dwCurrBase;
+				hiaddr = (((addr >> 15) + 1) >> 1) & 0xFFFF;
+				COutput::Printf(LEVEL_DEBUG, "Extended hi at (%08X)\n", dwRealOfs);
 
-								  loinst &= ~0xFFFF;
-								  loinst |= (addr & 0xFFFF);
-								  regs[reg].addr = addr;
+				imm = new ImmEntry;
+				imm->addr = dwRealOfs + dwBase;
+				imm->target = addr;
+				imm->text = ElfAddrIsText(addr - dwBase);
+				imms[dwRealOfs + dwBase] = imm;
 
-								  SW(*pData, loinst);
-							  }
-							  break;
-			case R_MIPS_26:   {
-								  u32 dwAddr;
-								  u32 dwInst;
+				hiinst &= ~0xFFFF;
+				hiinst |= (hiaddr & 0xFFFF);
+				SW(*pData, hiinst);			
+			}
+			break;
+			case R_MIPS_X_J26:
+			case R_MIPS_X_JAL26:
+			case R_MIPS_26: {
+				u32 dwAddr;
+				u32 dwInst;
 
-								  dwInst = LW(*pData);
-								  dwAddr = (dwInst & 0x03FFFFFF) << 2;
-								  dwAddr += dwCurrBase;
-								  dwInst &= ~0x03FFFFFF;
-								  dwAddr = (dwAddr >> 2) & 0x03FFFFFF;
-								  dwInst |= dwAddr;
-								  SW(*pData, dwInst);
-							  }
-							  break;
+				dwInst = LW(*pData);
+				dwAddr = (dwInst & 0x03FFFFFF) << 2;
+				dwAddr += dwCurrBase;
+				dwInst &= ~0x03FFFFFF;
+				dwAddr = (dwAddr >> 2) & 0x03FFFFFF;
+				dwInst |= dwAddr;
+				SW(*pData, dwInst);
+			}
+			break;
 			case R_MIPS_32:   {
-								  u32 dwData;
-								  ImmEntry *imm;
+				u32 dwData;
+				ImmEntry *imm;
 
-								  dwData = LW(*pData);
-								  dwData += dwCurrBase;
-								  SW(*pData, dwData);
+				dwData = LW(*pData);
+				dwData += dwCurrBase;
+				SW(*pData, dwData);
 
-								  imm = new ImmEntry;
-								  imm->addr = dwRealOfs + dwBase;
-								  imm->target = dwData;
-								  imm->text = ElfAddrIsText(dwData - dwBase);
-								  imms[dwRealOfs + dwBase] = imm;
-							  }
-							  break;
+				imm = new ImmEntry;
+				imm->addr = dwRealOfs + dwBase;
+				imm->target = dwData;
+				imm->text = ElfAddrIsText(dwData - dwBase);
+				imms[dwRealOfs + dwBase] = imm;
+			}
+			break;
 			default: /* Do nothing */
-							  break;
+			break;
 		};
 	}
 
-	/* Flush any remaining HI relocations */
-	for(iLoop = 0; iLoop < 32; iLoop++)
-	{
-		if(regs[iLoop].inst)
-		{
-			u32 oldinst;
-			/* Flush old instruction data to disk */
-			oldinst = LW(*regs[iLoop].inst);
-			oldinst &= ~0xFFFF;
-			if((regs[iLoop].addr & 0x8000) && (!regs[iLoop].ori))
-			{
-				regs[iLoop].addr += 0x10000;
-			}
-			oldinst |= (regs[iLoop].addr >> 16);
-			SW(*regs[iLoop].inst, oldinst);
-		}
-	}
 }
 
 /* Print a row of a memory dump, up to row_size */

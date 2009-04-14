@@ -29,14 +29,19 @@ class CProcessPrx : public CProcessElf
 	ImmMap m_imms;
 	SymbolMap m_syms;
 	u32 m_dwBase;
+	u32 m_stubBottom;
 	bool m_blXmlDump;
 
 	bool FillModule(u8 *pData, u32 iAddr);
+	bool CreateFakeSections();
 	void FreeMemory();
 	int  LoadSingleImport(PspModuleImport *pImport, u32 addr);
 	bool LoadImports();
 	int  LoadSingleExport(PspModuleExport *pExport, u32 addr);
 	bool LoadExports();
+	int  CountRelocs();
+	int  LoadRelocsTypeA(struct ElfReloc *pRelocs);
+	int  LoadRelocsTypeB(struct ElfReloc *pRelocs);
 	bool LoadRelocs();
 	bool BuildMaps();
 	void BuildSymbols(SymbolMap &syms, u32 dwBase);

@@ -15,9 +15,8 @@
  * %s - Rs
  * %i - 16bit signed immediate
  * %I - 16bit unsigned immediate (always printed in hex)
- * %o - 16bit signed offset (rt base)
+ * %o - 16bit signed offset (rs base)
  * %O - 16bit signed offset (PC relative)
- * %V - 16bit signed offset (rs base)
  * %j - 26bit absolute offset
  * %J - Register jump
  * %a - SA
@@ -133,7 +132,7 @@ static struct Instruction g_inst[] =
 	{ "beq",		0x10000000, 0xFC000000,	"%s, %t, %O", ADDR_TYPE_16, INSTR_TYPE_B },
 	{ "beql",		0x50000000, 0xFC000000,	"%s, %t, %O", ADDR_TYPE_16, INSTR_TYPE_B },
 	{ "bgez",		0x04010000, 0xFC1F0000,	"%s, %O", ADDR_TYPE_16, INSTR_TYPE_B },
-	{ "bgezal",		0x04110000, 0xFC1F0000,	"%s, %0", ADDR_TYPE_16, INSTR_TYPE_JAL },
+	{ "bgezal",		0x04110000, 0xFC1F0000,	"%s, %O", ADDR_TYPE_16, INSTR_TYPE_JAL },
 	{ "bgezl",		0x04030000, 0xFC1F0000,	"%s, %O", ADDR_TYPE_16, INSTR_TYPE_B },
 	{ "bgtz",		0x1C000000, 0xFC1F0000,	"%s, %O", ADDR_TYPE_16, INSTR_TYPE_B },
 	{ "bgtzl",		0x5C000000, 0xFC1F0000,	"%s, %O", ADDR_TYPE_16, INSTR_TYPE_B },
@@ -1478,8 +1477,6 @@ static void decode_args(unsigned int opcode, unsigned int PC, const char *fmt, c
 						  break;
 				case 'O': output = print_pcofs(IMM(opcode), PC, output);
 						  break;
-				case 'V': output = print_ofs(IMM(opcode), RS(opcode), output, realregs);
-						  break;
 				case 'j': output = print_jump(JUMP(opcode, PC), output);
 						  break;
 				case 'J': output = print_jumpr(RS(opcode), output, realregs);
@@ -2136,8 +2133,6 @@ static void decode_args_xml(unsigned int opcode, unsigned int PC, const char *fm
 				case 'o': output = print_ofs_xml(IMM(opcode), RS(opcode), output);
 						  break;
 				case 'O': output = print_pcofs_xml(IMM(opcode), PC, output);
-						  break;
-				case 'V': output = print_ofs_xml(IMM(opcode), RS(opcode), output);
 						  break;
 				case 'j': output = print_jump_xml(JUMP(opcode, PC), output);
 						  break;

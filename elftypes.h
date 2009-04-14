@@ -146,16 +146,24 @@ typedef u32 Elf32_Word;
 #define R_MIPS_NONE     0
 #define R_MIPS_16       1
 #define R_MIPS_32       2
-#define R_MIPS_REL32    3
 #define R_MIPS_26       4
 #define R_MIPS_HI16     5
 #define R_MIPS_LO16     6
+
+/* Unsupported for PRXes (loadcore.prx ignores them) */
+#define R_MIPS_REL32    3
 #define R_MIPS_GPREL16  7
 #define R_MIPS_LITERAL  8
 #define R_MIPS_GOT16    9
 #define R_MIPS_PC16     10
 #define R_MIPS_CALL16   11
 #define R_MIPS_GPREL32  12
+
+/* For the new relocation type */
+#define R_MIPS_X_HI16   13
+#define R_MIPS_X_J26    14
+#define R_MIPS_X_JAL26  15
+
 
 #define SHF_WRITE 		1
 #define SHF_ALLOC 		2
@@ -170,6 +178,9 @@ typedef u32 Elf32_Word;
 #define PT_PHDR 		6
 #define PT_LOPROC 		0x70000000
 #define PT_HIPROC 		0x7fffffff
+
+#define PT_PRXRELOC             0x700000A0
+#define PT_PRXRELOC2            0x700000A1
 
 /* ELF file header */
 typedef struct { 
