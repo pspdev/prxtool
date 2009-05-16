@@ -470,56 +470,112 @@ bool CProcessElf::BuildBinaryImage()
 	int iLoop;
 	u32 iMinAddr = 0xFFFFFFFF;
 	u32 iMaxAddr = 0;
+	long iMaxSize = 0;
 
 	assert(m_pElf != NULL);
 	assert(m_iElfSize > 0);
 	assert(m_pElfBin == NULL);
 	assert(m_iBinSize == 0);
-	
+
 	/* Find the maximum and minimum addresses */
-	for(iLoop = 0; iLoop < m_iPHCount; iLoop++)
+	if(m_elfHeader.iType == ELF_MIPS_TYPE)
 	{
-		ElfProgram* pProgram;
-
-		pProgram = &m_pElfPrograms[iLoop];
-
-		if(pProgram->iType == PT_LOAD)
+		COutput::Printf(LEVEL_DEBUG, "Using Section Headers for binary image\n");
+		/* If ELF type then use the sections */
+		for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
 		{
-			if((pProgram->iVaddr + pProgram->iMemsz) > iMaxAddr)
-			{
-				iMaxAddr = pProgram->iVaddr + pProgram->iMemsz;
-			}
+			ElfSection* pSection;
 
-			if(pProgram->iVaddr < iMinAddr)
+			pSection = &m_pElfSections[iLoop];
+
+			if(pSection->iFlags & SHF_ALLOC)
 			{
-				iMinAddr = pProgram->iVaddr;
+				if((pSection->iAddr + pSection->iSize) > (iMaxAddr + iMaxSize))
+				{
+					iMaxAddr = pSection->iAddr;
+					iMaxSize = pSection->iSize;
+				}
+
+				if(pSection->iAddr < iMinAddr)
+				{
+					iMinAddr = pSection->iAddr;
+				}
+			}
+		}
+
+		COutput::Printf(LEVEL_DEBUG, "Min Address %08X, Max Address %08X, Max Size %d\n", 
+									  iMinAddr, iMaxAddr, iMaxSize);
+
+		if(iMinAddr != 0xFFFFFFFF)
+		{
+			m_iBinSize = iMaxAddr - iMinAddr + iMaxSize;
+			SAFE_ALLOC(m_pElfBin, u8[m_iBinSize]);
+			if(m_pElfBin != NULL)
+			{
+				memset(m_pElfBin, 0, m_iBinSize);
+				for(iLoop = 0; iLoop < m_iSHCount; iLoop++)
+				{
+					ElfSection* pSection = &m_pElfSections[iLoop];
+
+					if((pSection->iFlags & SHF_ALLOC) && (pSection->iType != SHT_NOBITS) && (pSection->pData != NULL))
+					{
+						memcpy(m_pElfBin + (pSection->iAddr - iMinAddr), pSection->pData, pSection->iSize);
+					}
+				}
+
+				m_iBaseAddr = iMinAddr;
+				blRet = true;
 			}
 		}
 	}
-
-	COutput::Printf(LEVEL_DEBUG, "Min Address %08X, Max Address %08X\n", 
-								  iMinAddr, iMaxAddr);
-
-	if(iMinAddr != 0xFFFFFFFF)
+	else
 	{
-		m_iBinSize = iMaxAddr - iMinAddr;
-		SAFE_ALLOC(m_pElfBin, u8[m_iBinSize]);
-		if(m_pElfBin != NULL)
+		/* If PRX use the program headers */
+		COutput::Printf(LEVEL_DEBUG, "Using Program Headers for binary image\n");
+		for(iLoop = 0; iLoop < m_iPHCount; iLoop++)
 		{
-			memset(m_pElfBin, 0, m_iBinSize);
-			for(iLoop = 0; iLoop < m_iPHCount; iLoop++)
-			{
-				ElfProgram* pProgram = &m_pElfPrograms[iLoop];
+			ElfProgram* pProgram;
 
-				if((pProgram->iType == PT_LOAD) && (pProgram->pData != NULL))
+			pProgram = &m_pElfPrograms[iLoop];
+
+			if(pProgram->iType == PT_LOAD)
+			{
+				if((pProgram->iVaddr + pProgram->iMemsz) > iMaxAddr)
 				{
-					COutput::Printf(LEVEL_DEBUG, "Loading program %d 0x%08X\n", iLoop, pProgram->iType);
-					memcpy(m_pElfBin + (pProgram->iVaddr - iMinAddr), pProgram->pData, pProgram->iFilesz);
+					iMaxAddr = pProgram->iVaddr + pProgram->iMemsz;
+				}
+
+				if(pProgram->iVaddr < iMinAddr)
+				{
+					iMinAddr = pProgram->iVaddr;
 				}
 			}
+		}
 
-			m_iBaseAddr = iMinAddr;
-			blRet = true;
+		COutput::Printf(LEVEL_DEBUG, "Min Address %08X, Max Address %08X\n", 
+									  iMinAddr, iMaxAddr);
+
+		if(iMinAddr != 0xFFFFFFFF)
+		{
+			m_iBinSize = iMaxAddr - iMinAddr;
+			SAFE_ALLOC(m_pElfBin, u8[m_iBinSize]);
+			if(m_pElfBin != NULL)
+			{
+				memset(m_pElfBin, 0, m_iBinSize);
+				for(iLoop = 0; iLoop < m_iPHCount; iLoop++)
+				{
+					ElfProgram* pProgram = &m_pElfPrograms[iLoop];
+
+					if((pProgram->iType == PT_LOAD) && (pProgram->pData != NULL))
+					{
+						COutput::Printf(LEVEL_DEBUG, "Loading program %d 0x%08X\n", iLoop, pProgram->iType);
+						memcpy(m_pElfBin + (pProgram->iVaddr - iMinAddr), pProgram->pData, pProgram->iFilesz);
+					}
+				}
+
+				m_iBaseAddr = iMinAddr;
+				blRet = true;
+			}
 		}
 	}
 
