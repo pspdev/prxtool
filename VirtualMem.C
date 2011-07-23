@@ -85,8 +85,10 @@ u16   CVirtualMem::GetU16(u32 iAddr)
 	return 0;
 }
 
-u32   CVirtualMem::GetU32(u32 iAddr)
+u32   CVirtualMem::GetU32(u32 iAddr_2)
 {
+	s32 iAddr = iAddr_2;
+
 	if(CHECK_ADDR(iAddr, 4))
 	{
 		if(m_endian == MEM_LITTLE_ENDIAN)

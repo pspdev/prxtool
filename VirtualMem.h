@@ -21,7 +21,7 @@ class CVirtualMem
 {
 	u8 *m_pData;
 	u32 m_iSize;
-	u32 m_iBaseAddr;
+	s32 m_iBaseAddr;
 	MemEndian m_endian;
 public:
 	CVirtualMem();

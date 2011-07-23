@@ -16,7 +16,7 @@
 #define PSP_ENTRY_MAX_NAME 128
 /* Define the maximum number of permitted entries per lib */
 #define PSP_MAX_V_ENTRIES 255
-#define PSP_MAX_F_ENTRIES 65535
+#define PSP_MAX_F_ENTRIES 2000
 
 #define PSP_MODULE_INFO_NAME ".rodata.sceModuleInfo"
 
