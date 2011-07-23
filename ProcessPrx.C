@@ -192,10 +192,6 @@ int CProcessPrx::LoadSingleImport(PspModuleImport *pImport, u32 addr)
 				funcAddr += 8;
 			}
 			
-			if (funcAddr > m_stubBottom) {
-				m_stubBottom = funcAddr;
-			}
-
 			for(iLoop = 0; iLoop < pLib->v_count; iLoop++)
 			{
 				u32 varFixup;
@@ -272,7 +268,6 @@ bool CProcessPrx::LoadImports()
 
 	imp_base = m_modInfo.info.imports;
 	imp_end =  m_modInfo.info.imp_end;
-	m_stubBottom = 0;
 
 	if(imp_base != 0)
 	{
@@ -303,9 +298,6 @@ bool CProcessPrx::LoadImports()
 			}
 		}
 	}
-
-	m_stubBottom += 4;
-	COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
 
 	return blRet;
 }
@@ -497,6 +489,8 @@ bool CProcessPrx::FillModule(u8 *pData, u32 iAddr)
 		m_modInfo.info.exp_end = LW(m_modInfo.info.exp_end);
 		m_modInfo.info.imports = LW(m_modInfo.info.imports);
 		m_modInfo.info.imp_end = LW(m_modInfo.info.imp_end);
+      m_stubBottom = m_modInfo.info.exports - 4; // ".lib.ent.top"
+      COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
 		blRet = true;
 
 		if(COutput::GetDebug())
@@ -641,13 +635,28 @@ int CProcessPrx::CountRelocs()
 					return 0;
 				}
 				part1 = block1[temp];
-				pos += (part1 & 0x06);
-				if ((part1 & 0x01) != 0) {
-					if (part1 & 0x38 == 0x10) {
+            if ( (part1 & 0x01) == 0 ) {
+               if ( ( part1 & 0x06 ) == 4 ) {
+                  pos += 4;
+               }
+            }
+            else {
+               switch (part1 & 0x06) {
+               case 2:
 						pos += 2;
-					} else if (part1 & 0x38 == 0x18) {
+                  break;
+               case 4:
 						pos += 4;
+                  break;
 					}
+               switch (part1 & 0x38) {
+               case 0x10:
+                  pos += 2;
+                  break;
+               case 0x18:
+                  pos += 4;
+                  break;
+               }
 				}
 				iRelocCount++;
 			}
