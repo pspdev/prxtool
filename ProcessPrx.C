@@ -1582,12 +1582,19 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				u32 off = 0;
 				int base = iLoop;
 				ImmEntry *imm;
+				ElfReloc *rel2 = NULL;
+				u32 offs2 = 0;
 				while (++iLoop < m_iRelocCount)
-					if (m_pElfRelocs[iLoop].type == R_MIPS_X_JAL26 && (dwBase + m_pElfPrograms[iValPH].iVaddr) == dwCurrBase)
+				{
+					rel2 = &m_pElfRelocs[iLoop];
+					if (rel2->type == R_MIPS_X_JAL26 && (dwBase + m_pElfPrograms[(rel2->symbol >> 8) & 0xFF].iVaddr) == dwCurrBase)
 						break;
+				}
 
-				if (iLoop < m_iRelocCount)
-					off = LW(*(u32*) m_vMem.GetPtr(m_pElfRelocs[iLoop].offset + m_pElfPrograms[iOfsPH].iVaddr));
+				if (iLoop < m_iRelocCount) {
+					offs2 = rel2->offset + m_pElfPrograms[rel2->symbol & 0xFF].iVaddr;
+					off = LW(*(u32*) m_vMem.GetPtr(offs2));
+				}
 
 				dwInst = LW(*pData);
 				dwData = dwInst + (dwCurrBase >> 16);
@@ -1597,9 +1604,18 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				{
 					imm = new ImmEntry;
 					imm->addr = dwRealOfs + dwBase;
-					imm->target = dwCurrBase + (off & 0xFFFF);
+					imm->target = ((dwData & 0xFFFF) << 16) | (off & 0xFFFF);
 					imm->text = ElfAddrIsText(imm->target - dwBase);
 					imms[dwRealOfs + dwBase] = imm;
+				}
+				// already add the JAL26 symbol so we don't have to search for the J26 there
+				if (iLoop < m_iRelocCount && (dwData >> 26) != 3) // not JAL instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = offs2 + dwBase;
+					imm->target = ((dwData & 0xFFFF) << 16) | (off & 0xFFFF);
+					imm->text = ElfAddrIsText(imm->target - dwBase);
+					imms[offs2 + dwBase] = imm;
 				}
 
 				iLoop = base;
@@ -1612,15 +1628,6 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				dwInst = LW(*pData);
 				dwData = dwInst + (dwCurrBase & 0xFFFF);
 				SW(*pData, dwData);
-
-				if ((dwData >> 26) != 3) // not JAL instruction
-				{
-					imm = new ImmEntry;
-					imm->addr = dwRealOfs + dwBase;
-					imm->target = (dwCurrBase + (dwInst & 0xFFFF));
-					imm->text = ElfAddrIsText(imm->target - dwBase);
-					imms[dwRealOfs + dwBase] = imm;
-				}
 			}
 			break;
 			case R_MIPS_26: {
