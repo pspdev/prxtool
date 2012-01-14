@@ -489,8 +489,8 @@ bool CProcessPrx::FillModule(u8 *pData, u32 iAddr)
 		m_modInfo.info.exp_end = LW(m_modInfo.info.exp_end);
 		m_modInfo.info.imports = LW(m_modInfo.info.imports);
 		m_modInfo.info.imp_end = LW(m_modInfo.info.imp_end);
-      m_stubBottom = m_modInfo.info.exports - 4; // ".lib.ent.top"
-      COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
+		m_stubBottom = m_modInfo.info.exports - 4; // ".lib.ent.top"
+		COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
 		blRet = true;
 
 		if(COutput::GetDebug())

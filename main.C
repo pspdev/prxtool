@@ -34,6 +34,7 @@ enum OutputMode
 	OUTPUT_SYMBOLS = 11,
 	OUTPUT_DISASM  = 12,
 	OUTPUT_XMLDB = 13,
+	OUTPUT_ENT = 14,
 };
 
 static char **g_ppInfiles;
@@ -127,6 +128,8 @@ static struct ArgEntry cmd_options[] = {
 		"        : Print the module and library information to screen"},
 	{"impexp", 'f', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_IMPEXP, 
 		"        : Print the imports and exports of a prx"},
+	{"exports", 'p', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_ENT,
+		"        : Output an export file (.exp)"},
 	{"disasm", 'w', ARG_TYPE_INT, ARG_OPT_NONE, (void*) &g_outputMode, OUTPUT_DISASM, 
 		"        : Disasm the executable sections of the files (if more than one file output name is automatic)"},
 	{"disopts", 'i', ARG_TYPE_STR, ARG_OPT_REQUIRED, (void*) &g_disopts, 0, 
@@ -149,7 +152,7 @@ void DoOutput(OutputLevel level, const char *str)
 {
 	switch(level)
 	{
-		case LEVEL_INFO: fprintf(stderr, str);
+		case LEVEL_INFO: fprintf(stderr, "%s", str);
 						 break;
 		case LEVEL_WARNING: fprintf(stderr, "Warning: %s", str);
 							break;
@@ -671,6 +674,39 @@ void write_stub(const char *szDirectory, PspLibExport *pExp, CProcessPrx *pPrx)
 	}
 }
 
+void write_ent(PspLibExport *pExp, FILE *fp)
+{      
+	char szPath[MAXPATH];
+	COutput::Printf(LEVEL_DEBUG, "Library %s\n", pExp->name);
+	if(fp != NULL)
+	{
+		int i;
+		char *nidName = (char*)malloc(strlen(pExp->name) + 10);
+
+		fprintf(fp, "PSP_EXPORT_START(%s, 0x%04X, 0x%04X)\n", pExp->name, pExp->stub.flags & 0xFFFF, pExp->stub.flags >> 16);
+
+		for(i = 0; i < pExp->f_count; i++)
+		{
+			sprintf(nidName, "%s_%08X", pExp->name, pExp->funcs[i].nid);
+			if (strcmp(nidName, pExp->funcs[i].name) == 0)
+				fprintf(fp, "PSP_EXPORT_FUNC_NID(%s, 0x%08X)\n", pExp->funcs[i].name, pExp->funcs[i].nid);
+			else
+				fprintf(fp, "PSP_EXPORT_FUNC_HASH(%s)\n", pExp->funcs[i].name);
+		}
+		for (i = 0; i < pExp->v_count; i++)
+		{
+			sprintf(nidName, "%s_%08X", pExp->name, pExp->vars[i].nid);
+			if (strcmp(nidName, pExp->vars[i].name) == 0)
+				fprintf(fp, "PSP_EXPORT_VAR_NID(%s, 0x%08X)\n", pExp->vars[i].name, pExp->vars[i].nid);
+			else
+				fprintf(fp, "PSP_EXPORT_VAR_HASH(%s)\n", pExp->vars[i].name);
+		}
+
+		fprintf(fp, "PSP_EXPORT_END\n\n");
+		free(nidName);
+	}
+}
+
 void write_stub_new(const char *szDirectory, PspLibExport *pExp, CProcessPrx *pPrx)
 {
 	char szPath[MAXPATH];
@@ -755,9 +791,7 @@ void output_stubs_prx(const char *file, CNidMgr *pNids)
 	else
 	{
 		PspLibExport *pHead;
-		int i;
 
-		i = 0;
 		COutput::Printf(LEVEL_INFO, "Dependancy list for %s\n", file);
 		pHead = prx.GetExports();
 		while(pHead != NULL)
@@ -773,6 +807,29 @@ void output_stubs_prx(const char *file, CNidMgr *pNids)
 					write_stub("", pHead, &prx);
 				}
 			}
+			pHead = pHead->next;
+		}
+	}
+}
+
+void output_ents(const char *file, CNidMgr *pNids, FILE *f)
+{
+	CProcessPrx prx(g_dwBase);
+
+	prx.SetNidMgr(pNids);
+	if(prx.LoadFromFile(file) == false)
+	{
+		COutput::Puts(LEVEL_ERROR, "Couldn't load prx file structures\n");
+	}
+	else
+	{
+		PspLibExport *pHead;
+
+		COutput::Printf(LEVEL_INFO, "Dependancy list for %s\n", file);
+		pHead = prx.GetExports();
+		while(pHead != NULL)
+		{
+			write_ent(pHead, f);
 			pHead = pHead->next;
 		}
 	}
@@ -939,6 +996,19 @@ int main(int argc, char **argv)
 				output_xmldb(g_ppInfiles[iLoop], out_fp, &nids);
 			}
 			fprintf(out_fp, "</firmware>\n");
+		}
+		else if(g_outputMode == OUTPUT_ENT)
+		{
+			FILE *f = fopen("exports.exp", "w");
+
+			if (f != NULL)
+			{
+				fprintf(f, "# Export file automatically generated with prxtool\n");
+				fprintf(f, "PSP_BEGIN_EXPORTS\n\n");
+				output_ents(g_ppInfiles[0], &nids, f);
+				fprintf(f, "PSP_END_EXPORTS\n");
+				fclose(f);
+			}
 		}
 		else if(g_outputMode == OUTPUT_DISASM)
 		{
