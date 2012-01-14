@@ -1604,7 +1604,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				{
 					imm = new ImmEntry;
 					imm->addr = dwRealOfs + dwBase;
-					imm->target = ((dwData & 0xFFFF) << 16) | (off & 0xFFFF);
+					imm->target = dwCurrBase + (((dwInst & 0xFFFF) << 16) | (off & 0xFFFF));
 					imm->text = ElfAddrIsText(imm->target - dwBase);
 					imms[dwRealOfs + dwBase] = imm;
 				}
@@ -1613,7 +1613,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				{
 					imm = new ImmEntry;
 					imm->addr = offs2 + dwBase;
-					imm->target = ((dwData & 0xFFFF) << 16) | (off & 0xFFFF);
+					imm->target = dwCurrBase + (((dwInst & 0xFFFF) << 16) | (off & 0xFFFF));
 					imm->text = ElfAddrIsText(imm->target - dwBase);
 					imms[offs2 + dwBase] = imm;
 				}
