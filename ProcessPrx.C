@@ -972,12 +972,19 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 
 		if(pData != NULL)
 		{
-			if((FillModule(pData, iAddr)) && (LoadExports()) && (LoadImports()) && (CreateFakeSections()) && (LoadRelocs()))
+			if((FillModule(pData, iAddr)) && (LoadRelocs()))
 			{
-				COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
-				blRet = true;
 				m_blPrxLoaded = true;
-				BuildMaps();
+				if(m_pElfRelocs)
+				{
+				    FixupRelocs(m_dwBase, m_imms);
+				}
+				if ((LoadExports()) && (LoadImports()) && (CreateFakeSections()))
+				{
+				    COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
+				    BuildMaps();
+				    blRet = true;
+				}
 			}
 		}
 		else
@@ -1570,8 +1577,52 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				SW(*pData, hiinst);			
 			}
 			break;
-			case R_MIPS_X_J26:
-			case R_MIPS_X_JAL26:
+			case R_MIPS_X_J26: {
+				u32 dwData, dwInst;
+				u32 off = 0;
+				int base = iLoop;
+				ImmEntry *imm;
+				while (++iLoop < m_iRelocCount)
+					if (m_pElfRelocs[iLoop].type == R_MIPS_X_JAL26 && (dwBase + m_pElfPrograms[iValPH].iVaddr) == dwCurrBase)
+						break;
+
+				if (iLoop < m_iRelocCount)
+					off = LW(*(u32*) m_vMem.GetPtr(m_pElfRelocs[iLoop].offset + m_pElfPrograms[iOfsPH].iVaddr));
+
+				dwInst = LW(*pData);
+				dwData = dwInst + (dwCurrBase >> 16);
+				SW(*pData, dwData);
+
+				if ((dwData >> 26) != 2) // not J instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = dwRealOfs + dwBase;
+					imm->target = dwCurrBase + (off & 0xFFFF);
+					imm->text = ElfAddrIsText(imm->target - dwBase);
+					imms[dwRealOfs + dwBase] = imm;
+				}
+
+				iLoop = base;
+			}
+			break;
+			case R_MIPS_X_JAL26: {
+				u32 dwData, dwInst;
+				ImmEntry *imm;
+
+				dwInst = LW(*pData);
+				dwData = dwInst + (dwCurrBase & 0xFFFF);
+				SW(*pData, dwData);
+
+				if ((dwData >> 26) != 3) // not JAL instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = dwRealOfs + dwBase;
+					imm->target = (dwCurrBase + (dwInst & 0xFFFF));
+					imm->text = ElfAddrIsText(imm->target - dwBase);
+					imms[dwRealOfs + dwBase] = imm;
+				}
+			}
+			break;
 			case R_MIPS_26: {
 				u32 dwAddr;
 				u32 dwInst;
@@ -1585,19 +1636,23 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				SW(*pData, dwInst);
 			}
 			break;
-			case R_MIPS_32:   {
+			case R_MIPS_32: {
 				u32 dwData;
 				ImmEntry *imm;
 
 				dwData = LW(*pData);
-				dwData += dwCurrBase;
+				dwData += (dwCurrBase & 0x03FFFFFF);
+				dwData += (dwBase >> 2) & 0x03FFFFFF;
 				SW(*pData, dwData);
 
-				imm = new ImmEntry;
-				imm->addr = dwRealOfs + dwBase;
-				imm->target = dwData;
-				imm->text = ElfAddrIsText(dwData - dwBase);
-				imms[dwRealOfs + dwBase] = imm;
+				if ((dwData >> 26) != 2) // not J instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = dwRealOfs + dwBase;
+					imm->target = (dwData & 0x03FFFFFF) << 2;;
+					imm->text = ElfAddrIsText(dwData - dwBase);
+					imms[dwRealOfs + dwBase] = imm;
+				}
 			}
 			break;
 			default: /* Do nothing */
@@ -2353,10 +2408,6 @@ bool CProcessPrx::BuildMaps()
 {
 	int iLoop;
 
-	if(m_pElfRelocs)
-	{
-		FixupRelocs(m_dwBase, m_imms);
-	}
 	BuildSymbols(m_syms, m_dwBase);
 
 	ImmMap::iterator start = m_imms.begin();
