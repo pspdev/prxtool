@@ -489,8 +489,8 @@ bool CProcessPrx::FillModule(u8 *pData, u32 iAddr)
 		m_modInfo.info.exp_end = LW(m_modInfo.info.exp_end);
 		m_modInfo.info.imports = LW(m_modInfo.info.imports);
 		m_modInfo.info.imp_end = LW(m_modInfo.info.imp_end);
-      m_stubBottom = m_modInfo.info.exports - 4; // ".lib.ent.top"
-      COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
+		m_stubBottom = m_modInfo.info.exports - 4; // ".lib.ent.top"
+		COutput::Printf(LEVEL_DEBUG, "Stub bottom 0x%08X\n", m_stubBottom);
 		blRet = true;
 
 		if(COutput::GetDebug())
@@ -972,12 +972,19 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 
 		if(pData != NULL)
 		{
-			if((FillModule(pData, iAddr)) && (LoadExports()) && (LoadImports()) && (CreateFakeSections()) && (LoadRelocs()))
+			if((FillModule(pData, iAddr)) && (LoadRelocs()))
 			{
-				COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
-				blRet = true;
 				m_blPrxLoaded = true;
-				BuildMaps();
+				if(m_pElfRelocs)
+				{
+				    FixupRelocs(m_dwBase, m_imms);
+				}
+				if ((LoadExports()) && (LoadImports()) && (CreateFakeSections()))
+				{
+				    COutput::Printf(LEVEL_INFO, "Loaded PRX %s successfully\n", szFilename);
+				    BuildMaps();
+				    blRet = true;
+				}
 			}
 		}
 		else
@@ -1570,8 +1577,59 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				SW(*pData, hiinst);			
 			}
 			break;
-			case R_MIPS_X_J26:
-			case R_MIPS_X_JAL26:
+			case R_MIPS_X_J26: {
+				u32 dwData, dwInst;
+				u32 off = 0;
+				int base = iLoop;
+				ImmEntry *imm;
+				ElfReloc *rel2 = NULL;
+				u32 offs2 = 0;
+				while (++iLoop < m_iRelocCount)
+				{
+					rel2 = &m_pElfRelocs[iLoop];
+					if (rel2->type == R_MIPS_X_JAL26 && (dwBase + m_pElfPrograms[(rel2->symbol >> 8) & 0xFF].iVaddr) == dwCurrBase)
+						break;
+				}
+
+				if (iLoop < m_iRelocCount) {
+					offs2 = rel2->offset + m_pElfPrograms[rel2->symbol & 0xFF].iVaddr;
+					off = LW(*(u32*) m_vMem.GetPtr(offs2));
+				}
+
+				dwInst = LW(*pData);
+				dwData = dwInst + (dwCurrBase >> 16);
+				SW(*pData, dwData);
+
+				if ((dwData >> 26) != 2) // not J instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = dwRealOfs + dwBase;
+					imm->target = dwCurrBase + (((dwInst & 0xFFFF) << 16) | (off & 0xFFFF));
+					imm->text = ElfAddrIsText(imm->target - dwBase);
+					imms[dwRealOfs + dwBase] = imm;
+				}
+				// already add the JAL26 symbol so we don't have to search for the J26 there
+				if (iLoop < m_iRelocCount && (dwData >> 26) != 3) // not JAL instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = offs2 + dwBase;
+					imm->target = dwCurrBase + (((dwInst & 0xFFFF) << 16) | (off & 0xFFFF));
+					imm->text = ElfAddrIsText(imm->target - dwBase);
+					imms[offs2 + dwBase] = imm;
+				}
+
+				iLoop = base;
+			}
+			break;
+			case R_MIPS_X_JAL26: {
+				u32 dwData, dwInst;
+				ImmEntry *imm;
+
+				dwInst = LW(*pData);
+				dwData = dwInst + (dwCurrBase & 0xFFFF);
+				SW(*pData, dwData);
+			}
+			break;
 			case R_MIPS_26: {
 				u32 dwAddr;
 				u32 dwInst;
@@ -1585,19 +1643,23 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				SW(*pData, dwInst);
 			}
 			break;
-			case R_MIPS_32:   {
+			case R_MIPS_32: {
 				u32 dwData;
 				ImmEntry *imm;
 
 				dwData = LW(*pData);
-				dwData += dwCurrBase;
+				dwData += (dwCurrBase & 0x03FFFFFF);
+				dwData += (dwBase >> 2) & 0x03FFFFFF;
 				SW(*pData, dwData);
 
-				imm = new ImmEntry;
-				imm->addr = dwRealOfs + dwBase;
-				imm->target = dwData;
-				imm->text = ElfAddrIsText(dwData - dwBase);
-				imms[dwRealOfs + dwBase] = imm;
+				if ((dwData >> 26) != 2) // not J instruction
+				{
+					imm = new ImmEntry;
+					imm->addr = dwRealOfs + dwBase;
+					imm->target = (dwData & 0x03FFFFFF) << 2;;
+					imm->text = ElfAddrIsText(dwData - dwBase);
+					imms[dwRealOfs + dwBase] = imm;
+				}
 			}
 			break;
 			default: /* Do nothing */
@@ -2353,10 +2415,6 @@ bool CProcessPrx::BuildMaps()
 {
 	int iLoop;
 
-	if(m_pElfRelocs)
-	{
-		FixupRelocs(m_dwBase, m_imms);
-	}
 	BuildSymbols(m_syms, m_dwBase);
 
 	ImmMap::iterator start = m_imms.begin();
