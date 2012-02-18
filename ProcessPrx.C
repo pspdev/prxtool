@@ -1541,7 +1541,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				ImmEntry *imm;
 
 				loinst = LW(*pData);
-				addr = ((s16) (loinst & 0xFFFF)) + dwCurrBase;
+				addr = ((s16) (loinst & 0xFFFF) & 0xFFFF) + dwCurrBase;
 				COutput::Printf(LEVEL_DEBUG, "Low at (%08X)\n", dwRealOfs);
 
 				imm = new ImmEntry;
@@ -1551,7 +1551,7 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				imms[dwRealOfs + dwBase] = imm;
 
 				loinst &= ~0xFFFF;
-				loinst |= (addr & 0xFFFF);
+				loinst |= addr;
 				SW(*pData, loinst);
 			}
 			break;
@@ -1599,6 +1599,9 @@ void CProcessPrx::FixupRelocs(u32 dwBase, ImmMap &imms)
 				dwInst = LW(*pData);
 				dwData = dwInst + (dwCurrBase >> 16);
 				SW(*pData, dwData);
+
+				if (off & 0x8000)
+				    dwInst--;
 
 				if ((dwData >> 26) != 2) // not J instruction
 				{
