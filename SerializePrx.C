@@ -139,7 +139,7 @@ void CSerializePrx::DoRelocs(CProcessPrx &prx)
 			pBase = pRelocs;
 			pCurrSec = pRelocs->secname;
 			iCurrCount = 0;
-			while((iCount > 0) && (strcmp(pCurrSec, pRelocs->secname) == 0))
+			while((iCount > 0) && (pCurrSec == pRelocs->secname || (pCurrSec != NULL && pRelocs->secname != NULL && (strcmp(pCurrSec, pRelocs->secname) == 0))))
 			{
 				pRelocs++;
 				iCurrCount++;
