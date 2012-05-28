@@ -22,10 +22,12 @@ static SyslibEntry g_syslib[] = {
 	{ 0xd3744be0, "module_bootstart" },
     { 0xf01d73a7, "module_info" },
 	{ 0x2f064fa6, "module_reboot_before" },
+	{ 0xadf12745, "module_reboot_phase" },
 	{ 0xd632acdb, "module_start" },
 	{ 0x0f7c276c, "module_start_thread_parameter" },
 	{ 0xcee8593c, "module_stop" },
 	{ 0xcf0cc697, "module_stop_thread_parameter" },
+	{ 0x11b97506, "module_sdk_version" },
 };
 
 #define MASTER_NID_MAPPER "MasterNidMapper"
