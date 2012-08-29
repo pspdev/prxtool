@@ -960,7 +960,7 @@ bool CProcessPrx::LoadFromFile(const char *szFilename)
 			/* Get from program headers */
 			if(m_iPHCount > 0)
 			{
-				iAddr = m_pElfPrograms[0].iVaddr + (m_pElfPrograms[0].iPaddr & 0x7FFFFFFF) - m_pElfPrograms[0].iOffset;
+				iAddr = (m_pElfPrograms[0].iPaddr & 0x7FFFFFFF) - m_pElfPrograms[0].iOffset;
 				pData = m_pElfBin + iAddr;
 			}
 		}
