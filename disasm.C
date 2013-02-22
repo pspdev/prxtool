@@ -168,7 +168,7 @@ static struct Instruction g_inst[] =
 	{ "lbu",		0x90000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
 	{ "lh",			0x84000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
 	{ "lhu",		0x94000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
-	{ "ll",			0xC0000000, 0xFC000000,	"%t, %O", ADDR_TYPE_NONE, 0 },
+	{ "ll",			0xC0000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
 	{ "lui",		0x3C000000, 0xFFE00000,	"%t, %I", ADDR_TYPE_NONE, 0 },
 	{ "lw",			0x8C000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
 	{ "lwl",		0x88000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
