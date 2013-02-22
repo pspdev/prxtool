@@ -200,6 +200,7 @@ static struct Instruction g_inst[] =
 	{ "seb",		0x7C000420, 0xFFE007FF,	"%d, %t", ADDR_TYPE_NONE, 0 },
 	{ "seh",		0x7C000620, 0xFFE007FF,	"%d, %t", ADDR_TYPE_NONE, 0 },
 	{ "sb",			0xA0000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
+	{ "sc",			0xE0000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
 	{ "sh",			0xA4000000, 0xFC000000,	"%t, %o", ADDR_TYPE_NONE, 0 },
 	{ "sllv",		0x00000004, 0xFC0007FF,	"%d, %t, %s", ADDR_TYPE_NONE, 0 },
 	{ "sll",		0x00000000, 0xFFE0003F,	"%d, %t, %a", ADDR_TYPE_NONE, 0 },
